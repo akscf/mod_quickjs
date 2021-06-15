@@ -21,12 +21,10 @@ typedef struct {
     uint32_t                tx_sem;
     const char              *session_id;
     char                    *args;
+    void                    *script;
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
     switch_core_session_t   *session;
-    void                    *script;
-    //JSRuntime               *rt;
-    //JSContext               *ctx;
 } script_instance_t;
 
 typedef struct {
@@ -36,11 +34,12 @@ typedef struct {
     uint32_t                id;
     uint32_t                tx_sem;
     uint32_t                instances;
+    switch_size_t           code_length;
     char                    *name;
     char                    *path;
+    char                    *code;
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
-    switch_mutex_t          *mutex_instances;
     switch_inthash_t        *instances_map;
 } script_t;
 

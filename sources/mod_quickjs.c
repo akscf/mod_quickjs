@@ -23,6 +23,42 @@ static uint32_t script_sem_take(script_t *script);
 static void script_sem_release(script_t *script);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
+static JSValue js_myprint(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    const char *str;
+    int i;
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "JS_PRINT: argc=%i\n", argc);
+
+    for(i = 0; i < argc; i++) {
+        str = JS_ToCString(ctx, argv[i]);
+        if(str) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "JS_PRINT[%i]: %s\n", i, str);
+        }
+        JS_FreeCString(ctx, str);
+    }
+    return JS_UNDEFINED;
+}
+
+static void qjs_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx) {
+    JSValue exception_val = JS_GetException(ctx);
+
+    if(JS_IsError(ctx, exception_val)) {
+        JSValue stk_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+        const char *err_str = JS_ToCString(ctx, exception_val);
+        const char *stk_str = (JS_IsUndefined(stk_val) ? NULL : JS_ToCString(ctx, stk_val));
+
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "\n%s:%X:%s\nSTACK: %s\n", script->name, instance->id, err_str, stk_str);
+
+        if(err_str) JS_FreeCString(ctx, err_str);
+        if(stk_str) JS_FreeCString(ctx, stk_str);
+
+        JS_FreeValue(ctx, stk_val);
+    }
+
+    JS_FreeValue(ctx, exception_val);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
 static uint32_t name2id(char *name, uint32_t len) {
     return switch_crc32_8bytes((char *)name, len);
 }
@@ -129,6 +165,50 @@ static void script_instance_sem_release(script_instance_t *instance) {
     switch_mutex_unlock(instance->mutex);
 }
 
+static switch_status_t script_load_code(script_t *script) {
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
+    switch_file_t *file = NULL;
+
+    switch_assert(script);
+
+    if((status = switch_file_open(&file, script->path, SWITCH_FOPEN_READ, SWITCH_FPROT_UREAD, script->pool)) != SWITCH_STATUS_SUCCESS) {
+        return status;
+    }
+    script->code_length = switch_file_get_size(file);
+    if(!script->code_length) {
+        status = SWITCH_STATUS_FALSE;
+        goto out;
+    }
+    if((script->code = switch_core_alloc(script->pool, script->code_length + 1)) == NULL)  {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        status = SWITCH_STATUS_MEMERR;
+        goto out;
+    }
+    if(switch_file_read(file, script->code, &script->code_length) != SWITCH_STATUS_SUCCESS) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't read script file\n");
+        return SWITCH_STATUS_GENERR;
+    }
+    script->code[script->code_length] = '\0';
+out:
+    switch_file_close(file);
+    return status;
+}
+
+static switch_status_t script_setup_ctx(script_t *script, script_instance_t *instance, JSContext *ctx) {
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
+    JSValue global_obj, sess;
+
+    global_obj = JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, global_obj, "myprint", JS_NewCFunction(ctx, js_myprint, "myprint", 0));
+
+    sess = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, sess, "myPrint", JS_NewCFunction(ctx, js_myprint, "myPrint", 0));
+    JS_SetPropertyStr(ctx, global_obj, "session", sess);
+
+    JS_FreeValue(ctx, global_obj);
+    return status;
+}
+
 static switch_status_t script_destroy(script_t *script) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
 
@@ -184,12 +264,12 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     if(!script) {
         if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-            status = SWITCH_STATUS_GENERR;
+            status = SWITCH_STATUS_MEMERR;
             goto out;
         }
         if((script = switch_core_alloc(pool, sizeof(script_t))) == NULL)  {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-            status = SWITCH_STATUS_GENERR;
+            status = SWITCH_STATUS_MEMERR;
             goto out;
         }
         script->id = id;
@@ -210,12 +290,12 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     if(script_sem_take(script)) {
         if(switch_core_new_memory_pool(&ipool) != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-            status = SWITCH_STATUS_GENERR;
+            status = SWITCH_STATUS_MEMERR;
             goto out;
         }
         if((script_instance = switch_core_alloc(ipool, sizeof(script_instance_t))) == NULL)  {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-            status = SWITCH_STATUS_GENERR;
+            status = SWITCH_STATUS_MEMERR;
             goto out;
         }
         script_instance->pool = ipool;
@@ -226,9 +306,11 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         script_instance->id = (zstr(script_instance->session_id) ? rand_id() : name2id((char *)script_instance->session_id, strlen(script_instance->session_id)));
         script_instance->fl_async = async;
         switch_mutex_init(&script_instance->mutex, SWITCH_MUTEX_NESTED, ipool);
-        //
-        // todo: init js
-        //
+
+        if((status = script_load_code(script)) != SWITCH_STATUS_SUCCESS) {
+            goto out;
+        }
+
         switch_mutex_lock(script->mutex);
         switch_core_inthash_insert(script->instances_map, script_instance->id, script_instance);
         script->instances++;
@@ -268,7 +350,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     }
 out:
     if(status != SWITCH_STATUS_SUCCESS) {
-        if(pool) { switch_core_destroy_memory_pool(&pool); }
+        if(pool)  { switch_core_destroy_memory_pool(&pool); }
         if(ipool) { switch_core_destroy_memory_pool(&ipool); }
     }
     switch_safe_free(script_path_local);
@@ -281,25 +363,52 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
     script_instance_t *script_instance = (script_instance_t *) _ref;
     script_t *script = (script_t *)script_instance->script;
     uint8_t fl_async = script_instance->fl_async;
-    uint32_t t_cnt = 100;
+    JSRuntime *rt = NULL;
+    JSContext *ctx = NULL;
+    JSValue result;
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "STATED: %s (%X) [args=%s]\n", script->name, script_instance->id, script_instance->args);
 
-    script_instance->fl_ready = SWITCH_TRUE;
-    while(1) {
-        if(script->fl_do_kill || script_instance->fl_do_kill || script->fl_destroyed || script_instance->fl_destroyed || globals.fl_shutdown) {
-            break;
-        }
-        // test
-        switch_yield(100000);
-        if(t_cnt == 0) { break; }
-        else { t_cnt--; }
+    if(script->fl_do_kill || script_instance->fl_do_kill || script->fl_destroyed || script_instance->fl_destroyed || globals.fl_shutdown) {
+        goto out;
     }
-out:
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "FINISHED: %s (%X)\n", script->name, script_instance->id);
 
+    /* init */
+    if((rt = JS_NewRuntime()) == NULL) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "JS_NewRuntime fail\n");
+        goto out;
+    }
+    if((ctx = JS_NewContext(rt)) == NULL) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "JS_NewContext fail\n");
+        goto out;
+    }
+
+    /* setup */
+    JS_SetRuntimeInfo(rt, script_instance->session_id);
+    JS_SetCanBlock(rt, TRUE);
+    script_setup_ctx(script, script_instance, ctx);
+
+    /* eval */
+    script_instance->fl_ready = SWITCH_TRUE;
+    result = JS_Eval(ctx, script->code, script->code_length, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
+    if(JS_IsException(result)) {
+        qjs_dump_error(script, script_instance, ctx);
+        goto out;
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "result: %s\n", JS_ToCString(ctx, result));
+    }
+    JS_FreeValue(ctx, result);
+
+out:
     script_instance->fl_ready = SWITCH_FALSE;
     script_instance->fl_destroyed = SWITCH_TRUE;
+
+    if(ctx) {
+        JS_FreeContext(ctx);
+    }
+    if(rt) {
+        JS_FreeRuntime(rt);
+    }
 
     if(fl_async) {
         switch_mutex_lock(script->mutex);
