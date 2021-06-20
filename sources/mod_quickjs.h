@@ -25,6 +25,7 @@ typedef struct {
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
     switch_core_session_t   *session;
+    JSContext               *ctx;
 } script_instance_t;
 
 typedef struct {
@@ -41,6 +42,7 @@ typedef struct {
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
     switch_inthash_t        *instances_map;
+    JSRuntime               *rt;
 } script_t;
 
 #endif
