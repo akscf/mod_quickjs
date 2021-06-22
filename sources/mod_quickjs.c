@@ -56,7 +56,7 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_UNDEFINED;
 }
 
-static JSValue js_sleep(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_msleep(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     uint32_t msec = 0;
 
     if(argc > 0) {
@@ -67,6 +67,124 @@ static JSValue js_sleep(JSContext *ctx, JSValueConst this_val, int argc, JSValue
         return JS_TRUE;
     }
     return JS_FALSE;
+}
+
+static JSValue js_global_set(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    if(argc >= 2) {
+        const char *var_str, *val_str;
+
+        var_str = JS_ToCString(ctx, argv[0]);
+        val_str = JS_ToCString(ctx, argv[1]);
+
+        switch_core_set_variable(var_str, val_str);
+
+        JS_FreeCString(ctx, var_str);
+        JS_FreeCString(ctx, val_str);
+
+        return JS_TRUE;
+    }
+
+    return JS_FALSE;
+}
+
+static JSValue js_global_get(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    if(argc >= 1) {
+        const char *var_str;
+        char *val = NULL;
+
+        var_str = JS_ToCString(ctx, argv[0]);
+        val = switch_core_get_variable(var_str);
+        JS_FreeCString(ctx, var_str);
+
+        if(val) {
+            if(strcasecmp(val, "true") == 0) {
+                return JS_TRUE;
+            } else if(strcasecmp(val, "false") == 0) {
+                return JS_FALSE;
+            } else {
+                return JS_NewString(ctx, val);
+            }
+        }
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_exit(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    JSValue ret_val;
+    const char *exit_code;
+
+    if(!argc) {
+        return JS_FALSE;
+    }
+
+    exit_code = JS_ToCString(ctx, argv[0]);
+    if(zstr(exit_code)) {
+        JS_FreeCString(ctx, exit_code);
+        return JS_FALSE;
+    }
+
+    ret_val = JS_ThrowTypeError(ctx, "ERROR: %s", exit_code);
+    JS_FreeCString(ctx, exit_code);
+
+    return ret_val;
+}
+
+static JSValue js_system(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    const char *cmd;
+    int result;
+
+    if(!argc) {
+        return JS_FALSE;
+    }
+
+    cmd = JS_ToCString(ctx, argv[0]);
+    if(zstr(cmd)) {
+        return JS_UNDEFINED;
+    }
+    result = switch_system(cmd, SWITCH_TRUE);
+    JS_FreeCString(ctx, cmd);
+
+    return JS_NewInt32(ctx, result);
+}
+
+static JSValue js_api_execute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    const char *api_str;
+    const char *arg_str;
+    script_instance_t *script_instance = NULL;
+    switch_core_session_t *session = NULL;
+    switch_stream_handle_t stream = { 0 };
+    JSValue js_ret_val;
+
+    if(argc < 1) {
+        return JS_FALSE;
+    }
+
+    api_str = JS_ToCString(ctx, argv[0]);
+    arg_str = (argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL);
+
+    if(zstr(api_str)) {
+        return JS_UNDEFINED;
+    }
+
+    script_instance = JS_GetContextOpaque(ctx);
+    session = (script_instance ? script_instance->session : NULL);
+
+    SWITCH_STANDARD_STREAM(stream);
+    switch_api_execute(api_str, arg_str, session, &stream);
+    js_ret_val = JS_NewString(ctx, switch_str_nil((char *) stream.data));
+
+    switch_safe_free(stream.data);
+    if(api_str) JS_FreeCString(ctx, api_str);
+    if(arg_str) JS_FreeCString(ctx, arg_str);
+
+    return js_ret_val;
+}
+
+static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    //
+    // todo
+    //
+    return JS_UNDEFINED;
 }
 
 static void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx) {
@@ -259,7 +377,13 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
 
     /* global api */
     JS_SetPropertyStr(ctx, global_obj, "console_log", JS_NewCFunction(ctx, js_console_log, "console_log", 0));
-    JS_SetPropertyStr(ctx, global_obj, "sleep", JS_NewCFunction(ctx, js_sleep, "sleep", 1));
+    JS_SetPropertyStr(ctx, global_obj, "msleep", JS_NewCFunction(ctx, js_msleep, "msleep", 1));
+    JS_SetPropertyStr(ctx, global_obj, "bridge", JS_NewCFunction(ctx, js_bridge, "bridge", 2));
+    JS_SetPropertyStr(ctx, global_obj, "system", JS_NewCFunction(ctx, js_system, "system", 1));
+    JS_SetPropertyStr(ctx, global_obj, "exit", JS_NewCFunction(ctx, js_exit, "exit", 0));
+    JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
+    JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
+    JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
 
     /* session */
     session_obj = JS_NewObject(ctx);
@@ -524,8 +648,7 @@ static void event_handler_shutdown(switch_event_t *event) {
 
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
-    "run scriptName [args] - launch a new script instance\n" \
-    "int scriptName [instanceId] - interrupt instance/instances\n"
+    "run scriptName [args] - launch a new script instance\n"
 
 SWITCH_STANDARD_API(quickjs_cmd) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -582,51 +705,6 @@ SWITCH_STANDARD_API(quickjs_cmd) {
             stream->write_function(stream, "+OK\n");
         } else {
             stream->write_function(stream, "-ERR: %i\n", status);
-        }
-        goto out;
-    }
-    if(strcasecmp(argv[0], "int") == 0) {
-        script_t *script = NULL;
-        script = script_lookup(argv[1]);
-
-        if(script_sem_take(script)) {
-            if(argc > 2) {
-                script_instance_t *script_instance = NULL;
-                uint32_t id = strtol(argv[2], NULL, 16);
-
-                script_instance = instance_lookup(script, id);
-
-                if(script_instance_sem_take(script_instance)) {
-                    switch_mutex_lock(script_instance->mutex);
-                    script_instance->fl_do_kill = SWITCH_TRUE;
-                    switch_mutex_unlock(script_instance->mutex);
-
-                    script_instance_sem_release(script_instance);
-                    stream->write_function(stream, "+OK\n");
-                } else {
-                    stream->write_function(stream, "-ERR: Instance not found\n");
-                }
-            } else {
-                switch_hash_index_t *hidx = NULL;
-                for(hidx = switch_core_hash_first_iter(script->instances_map, hidx); hidx; hidx = switch_core_hash_next(&hidx)) {
-                    script_instance_t *script_instance = NULL;
-                    void *hval = NULL;
-
-                    switch_core_hash_this(hidx, NULL, NULL, &hval);
-                    script_instance = (script_instance_t *)hval;
-
-                    if(script_instance_sem_take(script_instance)) {
-                        switch_mutex_lock(script_instance->mutex);
-                        script_instance->fl_do_kill = SWITCH_TRUE;
-                        switch_mutex_unlock(script_instance->mutex);
-                        script_instance_sem_release(script_instance);
-                    }
-                }
-                stream->write_function(stream, "+OK\n");
-            }
-            script_sem_release(script);
-        } else {
-            stream->write_function(stream, "-ERR: Script not found\n");
         }
         goto out;
     }
