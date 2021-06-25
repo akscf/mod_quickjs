@@ -181,10 +181,31 @@ static JSValue js_api_execute(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    //
-    // todo
-    //
-    return JS_UNDEFINED;
+    void *bp = NULL;
+    switch_input_callback_function_t dtmf_func = NULL;
+    js_session_t *jss_a = NULL, *jss_b = NULL;
+    JSValue js_cb_fnc;
+
+    if(argc >= 2) {
+        jss_a = JS_GetOpaque(argv[0], js_session_class_id);
+        jss_b = JS_GetOpaque(argv[1], js_session_class_id);
+
+        if(!(jss_a && jss_a->session)) {
+            return JS_ThrowTypeError(ctx, "session A is not ready");
+        }
+        if(!(jss_b && jss_b->session)) {
+            return JS_ThrowTypeError(ctx, "session A is not ready");
+        }
+
+        if(argc >= 3) {
+            if(JS_IsFunction(ctx, argv[2])) {
+                // js_cb_fnc = JS_DupValue(ctx, argv[2]);
+            }
+        }
+
+        switch_ivr_multi_threaded_bridge(jss_a->session, jss_b->session, dtmf_func, bp, bp);
+    }
+    return JS_FALSE;
 }
 
 static void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx) {
@@ -346,6 +367,8 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     JSContext *ctx = script_instance->ctx;
     JSValue global_obj, session_obj, argc_obj, argv_obj;
+    switch_channel_t *channel = NULL;
+    switch_caller_profile_t *caller_profile = NULL;
 
     /* */
     JS_SetContextOpaque(ctx, script_instance);
@@ -386,9 +409,23 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
 
     /* session */
-    session_obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, session_obj, "log", JS_NewCFunction(ctx, js_console_log, "log", 0));
-    JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
+    if(script_instance->session) {
+        session_obj = JS_NewObject(ctx);
+        channel = switch_core_session_get_channel(script_instance->session);
+        caller_profile = switch_channel_get_caller_profile(channel);
+
+        /* props */
+        /*JS_SetPropertyStr(ctx, session_obj, "name", JS_NewString(ctx, switch_channel_get_name(channel)));
+        JS_SetPropertyStr(ctx, session_obj, "uuid", JS_NewString(ctx, switch_channel_get_uuid(channel)));
+        JS_SetPropertyStr(ctx, session_obj, "state", JS_NewString(ctx, switch_channel_state_name(switch_channel_get_state(channel))));
+        JS_SetPropertyStr(ctx, session_obj, "cause", JS_NewString(ctx, switch_channel_cause2str(switch_channel_get_cause(channel))));
+        JS_SetPropertyStr(ctx, session_obj, "causecode", JS_NewInt32(ctx, switch_channel_get_cause(channel)));*/
+
+        // functions
+        //JS_SetPropertyStr(ctx, session_obj, "log", JS_NewCFunction(ctx, js_console_log, "log", 0));
+        //
+        JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
+    }
 
     JS_FreeValue(ctx, global_obj);
     return status;

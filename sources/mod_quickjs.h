@@ -12,6 +12,11 @@
 
 #define MOD_VERSION "1.0"
 
+static JSClassID js_session_class_id;
+typedef struct {
+    switch_core_session_t   *session;
+} js_session_t;
+
 typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
