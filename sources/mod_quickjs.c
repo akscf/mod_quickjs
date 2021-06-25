@@ -8,6 +8,8 @@ static struct {
     switch_mutex_t          *mutex;
     switch_mutex_t          *mutex_scripts;
     switch_inthash_t        *scripts_map;
+    switch_mutex_t          *mutex_qjsrt;
+    JSRuntime               *qjs_rt;
     uint8_t                 fl_ready;
     uint8_t                 fl_shutdown;
     int                     active_threads;
@@ -19,10 +21,221 @@ SWITCH_MODULE_DEFINITION(mod_quickjs, mod_quickjs_load, mod_quickjs_shutdown, NU
 
 static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, void *obj);
 
+static script_t *script_lookup(char *name);
 static uint32_t script_sem_take(script_t *script);
 static void script_sem_release(script_t *script);
+static uint32_t script_instance_sem_take(script_instance_t *instance);
+static void script_instance_sem_release(script_instance_t *instance);
 
-// ---------------------------------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/* Session module */
+#define SESSION_CLASS_NAME              "Session"
+#define SESSION_PROP_NAME               0
+#define SESSION_PROP_UUID               1
+#define SESSION_PROP_STATE              2
+#define SESSION_PROP_CAUSE              3
+#define SESSION_PROP_CAUSECODE          4
+#define SESSION_PROP_CALLER_ID_NAME     5
+#define SESSION_PROP_CALLER_ID_NUMBER   6
+
+static JSClassID js_session_class_id;
+
+typedef struct {
+    switch_core_session_t   *session;
+} js_session_t;
+
+static void js_session_finalizer(JSRuntime *rt, JSValue val) {
+    js_session_t *jss = JS_GetOpaque(val, js_session_class_id);
+
+    if(jss->session) {
+        //switch_channel_t *channel = switch_core_session_get_channel(jss->session);
+        //switch_channel_set_private(channel, "jss", NULL);
+        //switch_core_event_hook_remove_state_change(session, hanguphook);
+        //if(switch_test_flag(jss, S_HUP)) {
+        //    switch_channel_hangup(channel, SWITCH_CAUSE_NORMAL_CLEARING);
+        //}
+        //switch_core_session_rwunlock(jss->session);
+    }
+    js_free_rt(rt, jss);
+}
+
+static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
+    js_session_t *sess = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+
+    if(!sess) {
+        return JS_EXCEPTION;
+    }
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_session_prop_get: prop_id=%i\n", magic);
+
+    switch(magic) {
+        case SESSION_PROP_NAME:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_UUID:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_STATE:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_CAUSE:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_CAUSECODE:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_CALLER_ID_NAME:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_CALLER_ID_NUMBER:
+            return JS_UNDEFINED;
+        break;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
+    js_session_t *sess = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+
+    if(!sess) {
+        return JS_EXCEPTION;
+    }
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_session_prop_set: prop_id=%i\n", magic);
+
+    switch(magic) {
+        case SESSION_PROP_NAME:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_UUID:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_STATE:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_CAUSE:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_CAUSECODE:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_CALLER_ID_NAME:
+            return JS_UNDEFINED;
+        break;
+        case SESSION_PROP_CALLER_ID_NUMBER:
+            return JS_UNDEFINED;
+        break;
+    }
+    return JS_UNDEFINED;
+}
+
+static JSValue js_session_api_stub(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "SESSION: api_stub\n");
+    return JS_UNDEFINED;
+}
+
+static JSClassDef js_session_class = {
+    SESSION_CLASS_NAME,
+    .finalizer = js_session_finalizer,
+};
+
+static const JSCFunctionListEntry js_session_proto_funcs[] = {
+    JS_CGETSET_MAGIC_DEF("name", js_session_property_get, js_session_property_set, SESSION_PROP_NAME),
+    JS_CGETSET_MAGIC_DEF("uuid", js_session_property_get, js_session_property_set, SESSION_PROP_UUID),
+    JS_CGETSET_MAGIC_DEF("state", js_session_property_get, js_session_property_set, SESSION_PROP_STATE),
+    JS_CGETSET_MAGIC_DEF("cause", js_session_property_get, js_session_property_set, SESSION_PROP_CAUSE),
+    JS_CGETSET_MAGIC_DEF("causecode", js_session_property_get, js_session_property_set, SESSION_PROP_CAUSECODE),
+    JS_CGETSET_MAGIC_DEF("caller_id_name", js_session_property_get, js_session_property_set, SESSION_PROP_CALLER_ID_NAME),
+    JS_CGETSET_MAGIC_DEF("caller_id_number", js_session_property_get, js_session_property_set, SESSION_PROP_CALLER_ID_NUMBER),
+    //
+    JS_CFUNC_DEF("originate", 2, js_session_api_stub),
+    JS_CFUNC_DEF("setCallerData", 2, js_session_api_stub),
+    JS_CFUNC_DEF("setHangupHook", 1, js_session_api_stub),
+    JS_CFUNC_DEF("setAutoHangup", 1, js_session_api_stub),
+    JS_CFUNC_DEF("sayPhrase", 1, js_session_api_stub),
+    JS_CFUNC_DEF("streamFile", 1, js_session_api_stub),
+    JS_CFUNC_DEF("recordFile", 1, js_session_api_stub),
+    JS_CFUNC_DEF("collectInput", 1, js_session_api_stub),
+    JS_CFUNC_DEF("flushEvents", 1, js_session_api_stub),
+    JS_CFUNC_DEF("flushDigits", 1, js_session_api_stub),
+    JS_CFUNC_DEF("speak", 1, js_session_api_stub),
+    JS_CFUNC_DEF("setVariable", 1, js_session_api_stub),
+    JS_CFUNC_DEF("getVariable", 1, js_session_api_stub),
+    JS_CFUNC_DEF("getDigits", 1, js_session_api_stub),
+    JS_CFUNC_DEF("answer", 0, js_session_api_stub),
+    JS_CFUNC_DEF("preAnswer", 0, js_session_api_stub),
+    JS_CFUNC_DEF("generateXmlCdr", 0, js_session_api_stub),
+    JS_CFUNC_DEF("ready", 0, js_session_api_stub),
+    JS_CFUNC_DEF("answered", 0, js_session_api_stub),
+    JS_CFUNC_DEF("mediaReady", 0, js_session_api_stub),
+    JS_CFUNC_DEF("waitForAnswer", 0, js_session_api_stub),
+    JS_CFUNC_DEF("waitForMedia", 0, js_session_api_stub),
+    JS_CFUNC_DEF("getEvent", 0, js_session_api_stub),
+    JS_CFUNC_DEF("sendEvent", 0, js_session_api_stub),
+    JS_CFUNC_DEF("hangup", 0, js_session_api_stub),
+    JS_CFUNC_DEF("execute", 0, js_session_api_stub),
+    JS_CFUNC_DEF("destroy", 0, js_session_api_stub),
+    JS_CFUNC_DEF("sleep", 1, js_session_api_stub),
+};
+
+static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+    JSValue obj = JS_UNDEFINED;
+    JSValue proto;
+    js_session_t *sess = NULL;
+    const char *uuid;
+
+    sess = js_mallocz(ctx, sizeof(js_session_t));
+    if(!sess) {
+        return JS_EXCEPTION;
+    }
+    // -------------------------------------------------------------
+    /* create a session */
+    uuid = JS_ToCString(ctx, argv[0]);
+    if(zstr(uuid)) {
+        goto fail;
+    }
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_session_contructor: session-uuid=%s\n", uuid);
+    JS_FreeCString(ctx, uuid);
+
+    // -------------------------------------------------------------
+    proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+    if(JS_IsException(proto)) {
+        goto fail;
+    }
+    obj = JS_NewObjectProtoClass(ctx, proto, js_session_class_id);
+    JS_FreeValue(ctx, proto);
+    if(JS_IsException(obj)) {
+        goto fail;
+    }
+    JS_SetOpaque(obj, sess);
+    return obj;
+fail:
+    js_free(ctx, sess);
+    JS_FreeValue(ctx, obj);
+    return JS_EXCEPTION;
+}
+
+static void js_session_class_init_rt(JSRuntime *rt) {
+    JS_NewClassID(&js_session_class_id);
+    JS_NewClass(rt, js_session_class_id, &js_session_class);
+}
+
+static switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj) {
+    JSValue session_proto;
+    JSValue session_class;
+
+    session_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, session_proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));
+
+    session_class = JS_NewCFunction2(ctx, js_session_contructor, SESSION_CLASS_NAME, 2, JS_CFUNC_constructor, 0);
+    JS_SetConstructor(ctx, session_class, session_proto);
+    JS_SetClassProto(ctx, js_session_class_id, session_proto);
+
+    JS_SetPropertyStr(ctx, global_obj, SESSION_CLASS_NAME, session_class);
+    return SWITCH_STATUS_SUCCESS;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     switch_log_level_t level = SWITCH_LOG_DEBUG;
     const char *file = __FILE__;
@@ -194,7 +407,7 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
             return JS_ThrowTypeError(ctx, "session A is not ready");
         }
         if(!(jss_b && jss_b->session)) {
-            return JS_ThrowTypeError(ctx, "session A is not ready");
+            return JS_ThrowTypeError(ctx, "session B is not ready");
         }
 
         if(argc >= 3) {
@@ -370,12 +583,13 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
     switch_channel_t *channel = NULL;
     switch_caller_profile_t *caller_profile = NULL;
 
-    /* */
+    /* init */
     JS_SetContextOpaque(ctx, script_instance);
 
-    /* */
+    /* global objects */
     global_obj = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global_obj, "script_id", JS_NewInt32(ctx, script_instance->id));
+    js_session_class_register(ctx, global_obj);
 
     /* script args */
     if(!zstr(script_instance->args)) {
@@ -410,21 +624,11 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
 
     /* session */
     if(script_instance->session) {
-        session_obj = JS_NewObject(ctx);
+        /*session_obj = JS_NewObject(ctx);
         channel = switch_core_session_get_channel(script_instance->session);
         caller_profile = switch_channel_get_caller_profile(channel);
-
-        /* props */
-        /*JS_SetPropertyStr(ctx, session_obj, "name", JS_NewString(ctx, switch_channel_get_name(channel)));
-        JS_SetPropertyStr(ctx, session_obj, "uuid", JS_NewString(ctx, switch_channel_get_uuid(channel)));
-        JS_SetPropertyStr(ctx, session_obj, "state", JS_NewString(ctx, switch_channel_state_name(switch_channel_get_state(channel))));
-        JS_SetPropertyStr(ctx, session_obj, "cause", JS_NewString(ctx, switch_channel_cause2str(switch_channel_get_cause(channel))));
-        JS_SetPropertyStr(ctx, session_obj, "causecode", JS_NewInt32(ctx, switch_channel_get_cause(channel)));*/
-
-        // functions
-        //JS_SetPropertyStr(ctx, session_obj, "log", JS_NewCFunction(ctx, js_console_log, "log", 0));
         //
-        JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
+        JS_SetPropertyStr(ctx, global_obj, "session", session_obj);*/
     }
 
     JS_FreeValue(ctx, global_obj);
@@ -445,12 +649,6 @@ static switch_status_t script_destroy(script_t *script) {
         while(script->tx_sem > 1) {
             switch_yield(100000);
         }
-
-        switch_mutex_lock(script->mutex);
-        if(script->rt) {
-            JS_FreeRuntime(script->rt);
-        }
-        switch_mutex_unlock(script->mutex);
 
         switch_core_destroy_memory_pool(&script->pool);
     }
@@ -508,20 +706,9 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         switch_core_inthash_init(&script->instances_map);
         switch_mutex_init(&script->mutex, SWITCH_MUTEX_NESTED, pool);
 
-        /* init jsrt */
-        script->rt = JS_NewRuntime();
-        if(script->rt == NULL) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "JS_NewRuntime fail\n");
-            goto out;
-        }
-        JS_SetCanBlock(script->rt, 1);
-        JS_SetRuntimeInfo(script->rt, script->name);
-        //JS_SetInterruptHandler(script->rt, )
-
         /* load script */
         if((status = script_load_code(script)) != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't load script\n");
-            JS_FreeRuntime(script->rt);
             goto out;
         }
 
@@ -553,13 +740,16 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         script_instance->fl_async = async;
         switch_mutex_init(&script_instance->mutex, SWITCH_MUTEX_NESTED, ipool);
 
-        switch_mutex_lock(script->mutex);
-        if((script_instance->ctx = JS_NewContext(script->rt)) == NULL) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "JS_NewContext fail\n");
+        /* create ctx */
+        switch_mutex_lock(globals.mutex_qjsrt);
+        script_instance->ctx = JS_NewContext(globals.qjs_rt);
+        switch_mutex_unlock(globals.mutex_qjsrt);
+
+        if(!script_instance->ctx) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create ctx (JS_NewContext fail)\n");
             status = SWITCH_STATUS_FALSE;
             goto out;
         }
-        switch_mutex_unlock(script->mutex);
 
         if(script_setup_ctx(script, script_instance) != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't setup ctx\n");
@@ -638,10 +828,6 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
         goto out;
     }
     JS_FreeValue(script_instance->ctx, result);
-
-    switch_mutex_lock(script->mutex);
-    JS_RunGC(script->rt);
-    switch_mutex_unlock(script->mutex);
 
 out:
     script_instance->fl_ready = SWITCH_FALSE;
@@ -788,7 +974,7 @@ out:
 #define CONFIG_NAME "quickjs.conf"
 SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
-    switch_xml_t cfg, xml, settings, param;
+    switch_xml_t cfg = NULL, xml = NULL, settings = NULL, param = NULL;
     switch_api_interface_t *cmd_interface;
     switch_application_interface_t *app_interface;
 
@@ -796,7 +982,19 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     switch_core_inthash_init(&globals.scripts_map);
     switch_mutex_init(&globals.mutex, SWITCH_MUTEX_NESTED, pool);
     switch_mutex_init(&globals.mutex_scripts, SWITCH_MUTEX_NESTED, pool);
+    switch_mutex_init(&globals.mutex_qjsrt, SWITCH_MUTEX_NESTED, pool);
 
+    /* quickjs rt */
+    globals.qjs_rt = JS_NewRuntime();
+    if(!globals.qjs_rt) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create qjs runtime (JS_NewRuntime fail)\n");
+        switch_goto_status(SWITCH_STATUS_GENERR, done);
+    }
+    JS_SetCanBlock(globals.qjs_rt, 1);
+    JS_SetRuntimeInfo(globals.qjs_rt, "mod_quickjs");
+    js_session_class_init_rt(globals.qjs_rt);
+
+    /* xml config */
     if((xml = switch_xml_open_cfg(CONFIG_NAME, &cfg, NULL)) == NULL) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't open: %s\n", CONFIG_NAME);
         switch_goto_status(SWITCH_STATUS_GENERR, done);
@@ -856,6 +1054,11 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
     switch_core_inthash_destroy(&globals.scripts_map);
     switch_mutex_unlock(globals.mutex_scripts);
 
+    if(globals.qjs_rt) {
+        JS_FreeRuntime(globals.qjs_rt);
+    }
     return SWITCH_STATUS_SUCCESS;
 }
+
+
 

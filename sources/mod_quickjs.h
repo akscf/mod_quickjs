@@ -11,11 +11,7 @@
 #include <quickjs-libc.h>
 
 #define MOD_VERSION "1.0"
-
-static JSClassID js_session_class_id;
-typedef struct {
-    switch_core_session_t   *session;
-} js_session_t;
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 typedef struct {
     uint8_t                 fl_ready;
@@ -47,7 +43,6 @@ typedef struct {
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
     switch_inthash_t        *instances_map;
-    JSRuntime               *rt;
 } script_t;
 
 #endif
