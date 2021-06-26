@@ -43,6 +43,7 @@ typedef struct {
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
     switch_inthash_t        *instances_map;
+
 } script_t;
 
 #endif
