@@ -55,6 +55,8 @@ typedef struct {
 
 void js_session_class_init_rt(JSRuntime *rt);
 switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj);
+JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session);
+JSClassID js_seesion_get_class_id();
 
 
 #endif
