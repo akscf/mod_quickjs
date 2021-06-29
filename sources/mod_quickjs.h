@@ -46,4 +46,15 @@ typedef struct {
 
 } script_t;
 
+
+/* Session class */
+typedef struct {
+    switch_core_session_t   *session;
+    uint8_t                 fl_hup;
+} js_session_t;
+
+void js_session_class_init_rt(JSRuntime *rt);
+switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj);
+
+
 #endif
