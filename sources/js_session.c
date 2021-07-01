@@ -395,6 +395,20 @@ static JSValue js_session_api_sleep(JSContext *ctx, JSValueConst this_val, int a
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+// callbacks
+static switch_status_t js_stream_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
+    switch_status_t status;
+    input_callback_state_t *cb_state = buf;
+    js_session_t *jss = cb_state->jss;
+
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_stream_input_callback: itype=%i\n", (int) itype);
+
+    return SWITCH_STATUS_SUCCESS;
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSClassDef js_session_class = {
     SESSION_CLASS_NAME,
     .finalizer = js_session_finalizer,
@@ -450,7 +464,9 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
         if(jss->fl_hup) {
             switch_channel_hangup(channel, SWITCH_CAUSE_NORMAL_CLEARING);
         }
-        switch_core_session_rwunlock(jss->session);
+        if(jss->fl_osess) {
+            switch_core_session_rwunlock(jss->session);
+        }
     }
     js_free_rt(rt, jss);
 }
@@ -495,32 +511,18 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     }
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
-    if(JS_IsException(proto)) {
-        goto fail;
-    }
+    if(JS_IsException(proto)) { goto fail; }
+
     obj = JS_NewObjectProtoClass(ctx, proto, js_session_class_id);
     JS_FreeValue(ctx, proto);
-    if(JS_IsException(obj)) {
-        goto fail;
-    }
+    if(JS_IsException(obj)) { goto fail; }
+
     JS_SetOpaque(obj, jss);
     return obj;
 fail:
     js_free(ctx, jss);
     JS_FreeValue(ctx, obj);
     return (has_error ? error : JS_EXCEPTION);
-}
-
-// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-static switch_status_t js_stream_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
-    switch_status_t status;
-    input_callback_state_t *cb_state = buf;
-    js_session_t *jss = cb_state->jss;
-
-
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_stream_input_callback: \n");
-
-    return SWITCH_STATUS_SUCCESS;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -552,12 +554,25 @@ switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj
 
 JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session) {
     js_session_t *jss;
-    JSValue obj;
+    JSValue obj, proto;
 
-    obj = JS_NewObjectClass(ctx, js_session_class_id);
-    jss = JS_GetOpaque(obj, js_session_class_id);
+    jss = js_mallocz(ctx, sizeof(js_session_t));
+    if(!jss) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        return JS_EXCEPTION;
+    }
 
+    proto = JS_NewObject(ctx);
+    if(JS_IsException(proto)) { return proto; }
+    JS_SetPropertyFunctionList(ctx, proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));
+
+    obj = JS_NewObjectProtoClass(ctx, proto, js_session_class_id);
+    JS_FreeValue(ctx, proto);
+    if(JS_IsException(obj)) { return obj; }
+
+    jss->fl_osess = SWITCH_TRUE;
     jss->session = session;
+    JS_SetOpaque(obj, jss);
 
     return obj;
 }

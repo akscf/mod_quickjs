@@ -26,6 +26,27 @@ static uint32_t script_sem_take(script_t *script);
 static void script_sem_release(script_t *script);
 static uint32_t script_instance_sem_take(script_instance_t *instance);
 static void script_instance_sem_release(script_instance_t *instance);
+static void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx);
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx) {
+    JSValue exception_val = JS_GetException(ctx);
+
+    if(JS_IsError(ctx, exception_val)) {
+        JSValue stk_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+        const char *err_str = JS_ToCString(ctx, exception_val);
+        const char *stk_str = (JS_IsUndefined(stk_val) ? NULL : JS_ToCString(ctx, stk_val));
+
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "(%X:%s)\n%s %s\n", instance->id, script->name, (err_str ? err_str : "[exception]"), stk_str);
+
+        if(err_str) JS_FreeCString(ctx, err_str);
+        if(stk_str) JS_FreeCString(ctx, stk_str);
+
+        JS_FreeValue(ctx, stk_val);
+    }
+
+    JS_FreeValue(ctx, exception_val);
+}
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -213,25 +234,6 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     return JS_FALSE;
 }
 
-static void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx) {
-    JSValue exception_val = JS_GetException(ctx);
-
-    if(JS_IsError(ctx, exception_val)) {
-        JSValue stk_val = JS_GetPropertyStr(ctx, exception_val, "stack");
-        const char *err_str = JS_ToCString(ctx, exception_val);
-        const char *stk_str = (JS_IsUndefined(stk_val) ? NULL : JS_ToCString(ctx, stk_val));
-
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "(%X:%s)\n%s %s\n", instance->id, script->name, err_str, stk_str);
-
-        if(err_str) JS_FreeCString(ctx, err_str);
-        if(stk_str) JS_FreeCString(ctx, stk_str);
-
-        JS_FreeValue(ctx, stk_val);
-    }
-
-    JS_FreeValue(ctx, exception_val);
-}
-
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 static uint32_t name2id(char *name, uint32_t len) {
     return switch_crc32_8bytes((char *)name, len);
@@ -353,7 +355,7 @@ static switch_status_t script_load_code(script_t *script) {
         status = SWITCH_STATUS_FALSE;
         goto out;
     }
-    if((script->code = switch_core_alloc(script->pool, script->code_length + 1)) == NULL)  {
+    if((script->code = switch_core_alloc(script->pool, script->code_length)) == NULL)  {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
         status = SWITCH_STATUS_MEMERR;
         goto out;
@@ -362,7 +364,7 @@ static switch_status_t script_load_code(script_t *script) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't read file\n");
         return SWITCH_STATUS_GENERR;
     }
-    script->code[script->code_length] = '\0';
+    //script->code[script->code_length] = '\0';
 out:
     switch_file_close(file);
     return status;
@@ -414,10 +416,16 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
 
     /* session */
     if(script_instance->session) {
-        session_obj = js_session_object_create(ctx, script_instance->session);
-        JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
+        /*session_obj = js_session_object_create(ctx, script_instance->session);
+        if(JS_IsException(session_obj)) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create session object\n");
+            ctx_dump_error(script, script_instance, ctx);
+            status = SWITCH_STATUS_FALSE;
+            JS_FreeValue(ctx, session_obj);
+        } else {
+            JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
+        }*/
     }
-
     JS_FreeValue(ctx, global_obj);
     return status;
 }
@@ -540,6 +548,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
 
         if(script_setup_ctx(script, script_instance) != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't setup ctx\n");
+            JS_FreeContext(script_instance->ctx);
             status = SWITCH_STATUS_FALSE;
             goto out;
         }
@@ -609,10 +618,12 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
     }
 
     script_instance->fl_ready = SWITCH_TRUE;
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "code_length=%i, script->name=%s\n", (int) script->code_length, script->name);
+
     result = JS_Eval(script_instance->ctx, script->code, script->code_length, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
     if(JS_IsException(result)) {
         ctx_dump_error(script, script_instance, script_instance->ctx);
-        goto out;
     }
     JS_FreeValue(script_instance->ctx, result);
 
@@ -744,10 +755,9 @@ SWITCH_STANDARD_APP(quickjs_app) {
     script_name = argv[0];
     script_args = (argc > 1 ? ((char *)data + (strlen(argv[0]) + 1)) : NULL);
 
-    if((status = script_launch(NULL, script_name, script_args, SWITCH_FALSE)) != SWITCH_STATUS_SUCCESS) {
+    if((status = script_launch(session, script_name, script_args, SWITCH_FALSE)) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't launch: %s\n", script_name);
     }
-
     goto out;
 usage:
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s\n", APP_SYNTAX);
@@ -816,12 +826,19 @@ done:
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
     switch_hash_index_t *hidx = NULL;
     void *hval = NULL;
+    int dl_cnt = 0;
 
     switch_event_unbind_callback(event_handler_shutdown);
 
     globals.fl_shutdown = SWITCH_TRUE;
     while(globals.active_threads > 0) {
         switch_yield(100000);
+        if(dl_cnt > 10) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "globals.active_threads=%i\n", globals.active_threads);
+            dl_cnt = 0;
+        } else {
+            dl_cnt++;
+        }
     }
 
     switch_mutex_lock(globals.mutex_scripts);

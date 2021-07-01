@@ -51,6 +51,7 @@ typedef struct {
 typedef struct {
     switch_core_session_t   *session;
     uint8_t                 fl_hup;
+    uint8_t                 fl_osess;
 } js_session_t;
 
 void js_session_class_init_rt(JSRuntime *rt);
