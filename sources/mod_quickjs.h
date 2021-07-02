@@ -10,14 +10,18 @@
 #include <quickjs.h>
 #include <quickjs-libc.h>
 
-#define MOD_VERSION "1.0"
+#define MOD_VERSION "1.0_a2"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
+typedef struct {
+    switch_core_session_t   *session;
+    uint8_t                 fl_hup;
+} js_session_t;
 
 typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
     uint8_t                 fl_do_kill;
-    uint8_t                 fl_async;
     uint32_t                id;
     uint32_t                tx_sem;
     const char              *session_id;
@@ -27,6 +31,7 @@ typedef struct {
     switch_mutex_t          *mutex;
     switch_core_session_t   *session;
     JSContext               *ctx;
+    JSValue                 jss_obj;
 } script_instance_t;
 
 typedef struct {
@@ -47,17 +52,9 @@ typedef struct {
 } script_t;
 
 
-/* Session class */
-typedef struct {
-    switch_core_session_t   *session;
-    uint8_t                 fl_hup;
-    uint8_t                 fl_osess;
-} js_session_t;
-
 void js_session_class_init_rt(JSRuntime *rt);
+JSClassID js_seesion_get_class_id();
 switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj);
 JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session);
-JSClassID js_seesion_get_class_id();
-
 
 #endif

@@ -352,10 +352,11 @@ static switch_status_t script_load_code(script_t *script) {
     }
     script->code_length = switch_file_get_size(file);
     if(!script->code_length) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Script file is empty: %s\n", script->path);
         status = SWITCH_STATUS_FALSE;
         goto out;
     }
-    if((script->code = switch_core_alloc(script->pool, script->code_length)) == NULL)  {
+    if((script->code = switch_core_alloc(script->pool, script->code_length + 1)) == NULL)  {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
         status = SWITCH_STATUS_MEMERR;
         goto out;
@@ -364,7 +365,7 @@ static switch_status_t script_load_code(script_t *script) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't read file\n");
         return SWITCH_STATUS_GENERR;
     }
-    //script->code[script->code_length] = '\0';
+    script->code[script->code_length] = '\0';
 out:
     switch_file_close(file);
     return status;
@@ -416,16 +417,18 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
 
     /* session */
     if(script_instance->session) {
-        /*session_obj = js_session_object_create(ctx, script_instance->session);
+        session_obj = js_session_object_create(ctx, script_instance->session);
         if(JS_IsException(session_obj)) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create session object\n");
             ctx_dump_error(script, script_instance, ctx);
             status = SWITCH_STATUS_FALSE;
             JS_FreeValue(ctx, session_obj);
         } else {
+            script_instance->jss_obj = session_obj;
             JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
-        }*/
+        }
     }
+
     JS_FreeValue(ctx, global_obj);
     return status;
 }
@@ -501,13 +504,11 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         switch_core_inthash_init(&script->instances_map);
         switch_mutex_init(&script->mutex, SWITCH_MUTEX_NESTED, pool);
 
-        /* load script */
         if((status = script_load_code(script)) != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't load script\n");
             goto out;
         }
 
-        /* add to map */
         switch_mutex_lock(globals.mutex_scripts);
         switch_core_inthash_insert(globals.scripts_map, script->id, script);
         switch_mutex_unlock(globals.mutex_scripts);
@@ -532,67 +533,28 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         script_instance->session_id = (session ? switch_core_session_get_uuid(session) : NULL);
         script_instance->args = (zstr(script_args_local) ? NULL : switch_core_strdup(ipool, script_args_local));
         script_instance->id = (zstr(script_instance->session_id) ? rand_id() : name2id((char *)script_instance->session_id, strlen(script_instance->session_id)));
-        script_instance->fl_async = async;
         switch_mutex_init(&script_instance->mutex, SWITCH_MUTEX_NESTED, ipool);
-
-        /* ctx */
-        switch_mutex_lock(globals.mutex_qjsrt);
-        script_instance->ctx = JS_NewContext(globals.qjs_rt);
-        switch_mutex_unlock(globals.mutex_qjsrt);
-
-        if(!script_instance->ctx) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create ctx (JS_NewContext fail)\n");
-            status = SWITCH_STATUS_FALSE;
-            goto out;
-        }
-
-        if(script_setup_ctx(script, script_instance) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't setup ctx\n");
-            JS_FreeContext(script_instance->ctx);
-            status = SWITCH_STATUS_FALSE;
-            goto out;
-        }
 
         switch_mutex_lock(script->mutex);
         switch_core_inthash_insert(script->instances_map, script_instance->id, script_instance);
         script->instances++;
         switch_mutex_unlock(script->mutex);
 
-        script_sem_take(script);
-        launch_thread(ipool, script_instance_thread, script_instance);
+        if(async) {
+            script_sem_take(script);
+            launch_thread(ipool, script_instance_thread, script_instance);
 
-        if(!async) {
-            while(SWITCH_TRUE) {
-                if(script->fl_do_kill || script_instance->fl_do_kill || script->fl_destroyed || script_instance->fl_destroyed || globals.fl_shutdown) {
-                    break;
-                }
-                switch_yield(10000);
-            }
-            script_instance->fl_ready = SWITCH_FALSE;
-            script_instance->fl_destroyed = SWITCH_TRUE;
-
-            switch_mutex_lock(script->mutex);
-            switch_core_inthash_delete(script->instances_map, script_instance->id);
-            script->instances--;
-            switch_mutex_unlock(script->mutex);
-
-            while(script_instance->tx_sem > 0) {
-                switch_yield(100000);
-            }
-
-            switch_mutex_lock(script_instance->mutex);
-            if(script_instance->ctx) {
-                JS_FreeContext(script_instance->ctx);
-            }
-            switch_mutex_unlock(script_instance->mutex);
-
-            switch_core_destroy_memory_pool(&script_instance->pool);
+        } else {
+            script_sem_take(script);
+            script_instance_thread(NULL, script_instance);
         }
+
         script_sem_release(script);
 
         if(!script->instances) {
             script_destroy(script);
         }
+
     } else {
         status = SWITCH_STATUS_FALSE;
     }
@@ -610,54 +572,70 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
     volatile script_instance_t *_ref = (script_instance_t *) obj;
     script_instance_t *script_instance = (script_instance_t *) _ref;
     script_t *script = (script_t *)script_instance->script;
-    uint8_t fl_async = script_instance->fl_async;
     JSValue result;
 
     if(script->fl_do_kill || script_instance->fl_do_kill || script->fl_destroyed || script_instance->fl_destroyed || globals.fl_shutdown) {
         goto out;
     }
 
-    script_instance->fl_ready = SWITCH_TRUE;
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "script->name=%s, path=%s, thread=%p\n", script->name, script->path, thread);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "code_length=%i, script->name=%s\n", (int) script->code_length, script->name);
+    switch_mutex_lock(globals.mutex_qjsrt);
+    script_instance->ctx = JS_NewContext(globals.qjs_rt);
+    switch_mutex_unlock(globals.mutex_qjsrt);
+
+    if(!script_instance->ctx) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create ctx\n");
+        goto out;
+    }
+    if(script_setup_ctx(script, script_instance) != SWITCH_STATUS_SUCCESS) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't setup ctx\n");
+        goto out;
+    }
+
+    script_instance->fl_ready = SWITCH_TRUE;
 
     result = JS_Eval(script_instance->ctx, script->code, script->code_length, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
     if(JS_IsException(result)) {
         ctx_dump_error(script, script_instance, script_instance->ctx);
     }
+
     JS_FreeValue(script_instance->ctx, result);
+    JS_RunGC(globals.qjs_rt);
 
 out:
     script_instance->fl_ready = SWITCH_FALSE;
     script_instance->fl_destroyed = SWITCH_TRUE;
 
-    if(fl_async) {
-        switch_mutex_lock(script->mutex);
-        switch_core_inthash_delete(script->instances_map, script_instance->id);
-        script->instances--;
-        switch_mutex_unlock(script->mutex);
+    switch_mutex_lock(script->mutex);
+    switch_core_inthash_delete(script->instances_map, script_instance->id);
+    script->instances--;
+    switch_mutex_unlock(script->mutex);
 
-        while(script_instance->tx_sem > 0) {
-            switch_yield(100000);
-        }
-
-        switch_mutex_lock(script_instance->mutex);
-        if(script_instance->ctx) {
-            JS_FreeContext(script_instance->ctx);
-        }
-        switch_mutex_unlock(script_instance->mutex);
-
-        switch_core_destroy_memory_pool(&script_instance->pool);
+    while(script_instance->tx_sem > 0) {
+        switch_yield(100000);
     }
+
+    switch_mutex_lock(script_instance->mutex);
+    JS_FreeValue(script_instance->ctx, script_instance->jss_obj);
+    if(script_instance->ctx) {
+        JS_FreeContext(script_instance->ctx);
+    }
+    switch_mutex_unlock(script_instance->mutex);
+
+    switch_core_destroy_memory_pool(&script_instance->pool);
+
     script_sem_release(script);
 
-    if(fl_async && !script->instances) {
+    if(!script->instances) {
         script_destroy(script);
     }
 
-    switch_mutex_lock(globals.mutex);
-    if(globals.active_threads > 0) globals.active_threads--;
-    switch_mutex_unlock(globals.mutex);
+    if(thread) {
+        switch_mutex_lock(globals.mutex);
+        if(globals.active_threads > 0) globals.active_threads--;
+        switch_mutex_unlock(globals.mutex);
+    }
 
     return NULL;
 }
@@ -781,7 +759,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     switch_mutex_init(&globals.mutex_scripts, SWITCH_MUTEX_NESTED, pool);
     switch_mutex_init(&globals.mutex_qjsrt, SWITCH_MUTEX_NESTED, pool);
 
-    /* quickjs rt */
+    /* quickjs */
     globals.qjs_rt = JS_NewRuntime();
     if(!globals.qjs_rt) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create qjs runtime (JS_NewRuntime fail)\n");
@@ -826,19 +804,12 @@ done:
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
     switch_hash_index_t *hidx = NULL;
     void *hval = NULL;
-    int dl_cnt = 0;
 
     switch_event_unbind_callback(event_handler_shutdown);
 
     globals.fl_shutdown = SWITCH_TRUE;
     while(globals.active_threads > 0) {
         switch_yield(100000);
-        if(dl_cnt > 10) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "globals.active_threads=%i\n", globals.active_threads);
-            dl_cnt = 0;
-        } else {
-            dl_cnt++;
-        }
     }
 
     switch_mutex_lock(globals.mutex_scripts);
@@ -853,7 +824,6 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
             script_sem_release(script);
         }
     }
-
     switch_safe_free(hidx);
     switch_core_inthash_destroy(&globals.scripts_map);
     switch_mutex_unlock(globals.mutex_scripts);
@@ -861,6 +831,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
     if(globals.qjs_rt) {
         JS_FreeRuntime(globals.qjs_rt);
     }
+
     return SWITCH_STATUS_SUCCESS;
 }
 

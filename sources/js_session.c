@@ -401,7 +401,6 @@ static switch_status_t js_stream_input_callback(switch_core_session_t *session, 
     input_callback_state_t *cb_state = buf;
     js_session_t *jss = cb_state->jss;
 
-
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_stream_input_callback: itype=%i\n", (int) itype);
 
     return SWITCH_STATUS_SUCCESS;
@@ -458,15 +457,15 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
 static void js_session_finalizer(JSRuntime *rt, JSValue val) {
     js_session_t *jss = JS_GetOpaque(val, js_session_class_id);
 
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-finalizer: jss=%p, session=%p\n", jss, jss->session);
+
     if(jss->session) {
         switch_channel_t *channel = switch_core_session_get_channel(jss->session);
         //switch_core_event_hook_remove_state_change(jss->session, js_hangup_hook);
         if(jss->fl_hup) {
             switch_channel_hangup(channel, SWITCH_CAUSE_NORMAL_CLEARING);
         }
-        if(jss->fl_osess) {
-            switch_core_session_rwunlock(jss->session);
-        }
+        //switch_core_session_rwunlock(jss->session);
     }
     js_free_rt(rt, jss);
 }
@@ -518,6 +517,9 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     if(JS_IsException(obj)) { goto fail; }
 
     JS_SetOpaque(obj, jss);
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-constructor: jss=%p, session=%p\n", jss, jss->session);
+
     return obj;
 fail:
     js_free(ctx, jss);
@@ -570,9 +572,10 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { return obj; }
 
-    jss->fl_osess = SWITCH_TRUE;
     jss->session = session;
     JS_SetOpaque(obj, jss);
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "object_create: jss=%p, session=%p\n", jss, jss->session);
 
     return obj;
 }
