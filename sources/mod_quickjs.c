@@ -371,7 +371,7 @@ out:
     return status;
 }
 
-static switch_status_t script_setup_ctx(script_t *script, script_instance_t *script_instance) {
+static switch_status_t script_configure_ctx(script_t *script, script_instance_t *script_instance) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     JSContext *ctx = script_instance->ctx;
     JSValue global_obj, session_obj, argc_obj, argv_obj;
@@ -379,7 +379,6 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
     /* init */
     JS_SetContextOpaque(ctx, script_instance);
 
-    /* global objects */
     global_obj = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global_obj, "script_id", JS_NewInt32(ctx, script_instance->id));
     js_session_class_register_ctx(ctx, global_obj);
@@ -414,20 +413,6 @@ static switch_status_t script_setup_ctx(script_t *script, script_instance_t *scr
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
-
-    /* session */
-    if(script_instance->session) {
-        session_obj = js_session_object_create(ctx, script_instance->session);
-        if(JS_IsException(session_obj)) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create session object\n");
-            ctx_dump_error(script, script_instance, ctx);
-            status = SWITCH_STATUS_FALSE;
-            JS_FreeValue(ctx, session_obj);
-        } else {
-            script_instance->jss_obj = session_obj;
-            JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
-        }
-    }
 
     JS_FreeValue(ctx, global_obj);
     return status;
@@ -543,18 +528,14 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         if(async) {
             script_sem_take(script);
             launch_thread(ipool, script_instance_thread, script_instance);
-
         } else {
-            script_sem_take(script);
             script_instance_thread(NULL, script_instance);
         }
-
         script_sem_release(script);
 
         if(!script->instances) {
             script_destroy(script);
         }
-
     } else {
         status = SWITCH_STATUS_FALSE;
     }
@@ -572,13 +553,12 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
     volatile script_instance_t *_ref = (script_instance_t *) obj;
     script_instance_t *script_instance = (script_instance_t *) _ref;
     script_t *script = (script_t *)script_instance->script;
+    char *script_buf_local = NULL, *script_tmp_buff = NULL;
     JSValue result;
 
     if(script->fl_do_kill || script_instance->fl_do_kill || script->fl_destroyed || script_instance->fl_destroyed || globals.fl_shutdown) {
         goto out;
     }
-
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "script->name=%s, path=%s, thread=%p\n", script->name, script->path, thread);
 
     switch_mutex_lock(globals.mutex_qjsrt);
     script_instance->ctx = JS_NewContext(globals.qjs_rt);
@@ -588,24 +568,39 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create ctx\n");
         goto out;
     }
-    if(script_setup_ctx(script, script_instance) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't setup ctx\n");
+    if(script_configure_ctx(script, script_instance) != SWITCH_STATUS_SUCCESS) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't configure ctx\n");
         goto out;
     }
 
-    script_instance->fl_ready = SWITCH_TRUE;
+    if(script_instance->session) {
+        uint32_t clen = 0;
+        switch_channel_t *channel = switch_core_session_get_channel(script_instance->session);
+        script_tmp_buff = switch_mprintf("var session = new Session('%s');\n", switch_channel_get_uuid(channel));
 
-    result = JS_Eval(script_instance->ctx, script->code, script->code_length, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
+        clen = (script->code_length + strlen(script_tmp_buff) + 1);
+        switch_zmalloc(script_buf_local, clen);
+        memcpy(script_buf_local, script_tmp_buff, strlen(script_tmp_buff));
+        memcpy(script_buf_local + strlen(script_tmp_buff), script->code, script->code_length);
+
+        script_instance->fl_ready = SWITCH_TRUE;
+        result = JS_Eval(script_instance->ctx, script_buf_local, (clen - 1), script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
+    } else {
+        script_instance->fl_ready = SWITCH_TRUE;
+        result = JS_Eval(script_instance->ctx, script->code, script->code_length, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
+    }
     if(JS_IsException(result)) {
         ctx_dump_error(script, script_instance, script_instance->ctx);
     }
 
     JS_FreeValue(script_instance->ctx, result);
     JS_RunGC(globals.qjs_rt);
-
 out:
     script_instance->fl_ready = SWITCH_FALSE;
     script_instance->fl_destroyed = SWITCH_TRUE;
+
+    switch_safe_free(script_tmp_buff);
+    switch_safe_free(script_buf_local);
 
     switch_mutex_lock(script->mutex);
     switch_core_inthash_delete(script->instances_map, script_instance->id);
@@ -617,7 +612,6 @@ out:
     }
 
     switch_mutex_lock(script_instance->mutex);
-    JS_FreeValue(script_instance->ctx, script_instance->jss_obj);
     if(script_instance->ctx) {
         JS_FreeContext(script_instance->ctx);
     }
@@ -626,7 +620,6 @@ out:
     switch_core_destroy_memory_pool(&script_instance->pool);
 
     script_sem_release(script);
-
     if(!script->instances) {
         script_destroy(script);
     }
