@@ -26,10 +26,9 @@ static uint32_t script_sem_take(script_t *script);
 static void script_sem_release(script_t *script);
 static uint32_t script_instance_sem_take(script_instance_t *instance);
 static void script_instance_sem_release(script_instance_t *instance);
-static void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx);
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-static void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx) {
+void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx) {
     JSValue exception_val = JS_GetException(ctx);
 
     if(JS_IsError(ctx, exception_val)) {
@@ -37,7 +36,11 @@ static void ctx_dump_error(script_t *script, script_instance_t *instance, JSCont
         const char *err_str = JS_ToCString(ctx, exception_val);
         const char *stk_str = (JS_IsUndefined(stk_val) ? NULL : JS_ToCString(ctx, stk_val));
 
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "(%X:%s)\n%s %s\n", instance->id, script->name, (err_str ? err_str : "[exception]"), stk_str);
+        if(script && instance) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "(%X:%s)\n%s %s\n", instance->id, script->name, (err_str ? err_str : "[exception]"), stk_str);
+        } else {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s %s\n", (err_str ? err_str : "[exception]"), stk_str);
+        }
 
         if(err_str) JS_FreeCString(ctx, err_str);
         if(stk_str) JS_FreeCString(ctx, stk_str);
@@ -213,8 +216,8 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     JSValue js_cb_fnc;
 
     if(argc >= 2) {
-        jss_a = JS_GetOpaque(argv[0], js_seesion_get_class_id());
-        jss_b = JS_GetOpaque(argv[1], js_seesion_get_class_id());
+        jss_a = JS_GetOpaque(argv[0], js_seesion_class_get_id());
+        jss_b = JS_GetOpaque(argv[1], js_seesion_class_get_id());
 
         if(!(jss_a && jss_a->session)) {
             return JS_ThrowTypeError(ctx, "Session A is not ready");
@@ -382,6 +385,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     global_obj = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global_obj, "script_id", JS_NewInt32(ctx, script_instance->id));
     js_session_class_register_ctx(ctx, global_obj);
+    js_dtmf_class_register_ctx(ctx, global_obj);
 
     /* script args */
     if(!zstr(script_instance->args)) {
@@ -760,7 +764,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     }
     JS_SetCanBlock(globals.qjs_rt, 1);
     JS_SetRuntimeInfo(globals.qjs_rt, "mod_quickjs");
-    js_session_class_init_rt(globals.qjs_rt);
+    js_session_class_register_rt(globals.qjs_rt);
+    js_dtmf_class_register_rt(globals.qjs_rt);
 
     /* xml config */
     if((xml = switch_xml_open_cfg(CONFIG_NAME, &cfg, NULL)) == NULL) {

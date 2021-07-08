@@ -14,11 +14,6 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 typedef struct {
-    switch_core_session_t   *session;
-    uint8_t                 fl_hup;
-} js_session_t;
-
-typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
     uint8_t                 fl_do_kill;
@@ -50,9 +45,27 @@ typedef struct {
 
 } script_t;
 
+void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx);
 
-void js_session_class_init_rt(JSRuntime *rt);
-JSClassID js_seesion_get_class_id();
+// session
+typedef struct {
+    switch_core_session_t   *session;
+    uint8_t                 fl_hup;
+} js_session_t;
+
+JSClassID js_seesion_class_get_id();
+void js_session_class_register_rt(JSRuntime *rt);
 switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj);
+JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session);
+
+// dtmf
+typedef struct {
+    switch_dtmf_t           *dtmf;
+} js_dtmf_t;
+
+JSClassID js_dtmf_class_get_id();
+void js_dtmf_class_register_rt(JSRuntime *rt);
+switch_status_t js_dtmf_class_register_ctx(JSContext *ctx, JSValue global_obj);
+JSValue js_dtmf_object_create(JSContext *ctx, switch_dtmf_t *dtmf);
 
 #endif
