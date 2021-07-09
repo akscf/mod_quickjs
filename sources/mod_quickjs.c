@@ -385,6 +385,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     global_obj = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global_obj, "script_id", JS_NewInt32(ctx, script_instance->id));
     js_session_class_register_ctx(ctx, global_obj);
+    js_event_class_register_ctx(ctx, global_obj);
     js_dtmf_class_register_ctx(ctx, global_obj);
 
     /* script args */
@@ -765,6 +766,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     JS_SetCanBlock(globals.qjs_rt, 1);
     JS_SetRuntimeInfo(globals.qjs_rt, "mod_quickjs");
     js_session_class_register_rt(globals.qjs_rt);
+    js_event_class_register_rt(globals.qjs_rt);
     js_dtmf_class_register_rt(globals.qjs_rt);
 
     /* xml config */

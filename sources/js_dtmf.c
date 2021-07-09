@@ -56,13 +56,16 @@ static const JSCFunctionListEntry js_dtmf_proto_funcs[] = {
 static void js_dtmf_finalizer(JSRuntime *rt, JSValue val) {
     js_dtmf_t *js_dtmf = JS_GetOpaque(val, js_dtmf_class_id);
 
-    if(!js_dtmf) { return; }
+    if(!js_dtmf) {
+        return;
+    }
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-dtmf-finalizer: js_dtmf=%p\n", js_dtmf);
 
     /*if(js_dtmf->dtmf) {
         switch_safe_free(js_dtmf->dtmf);
     }*/
+
     js_free_rt(rt, js_dtmf);
 }
 
@@ -78,11 +81,8 @@ static JSValue js_dtmf_contructor(JSContext *ctx, JSValueConst new_target, int a
         return JS_EXCEPTION;
     }
 
-    if(argc > 0 ) {
-        // ename
-    }
-    if(argc >= 1) {
-        JS_ToUint32(ctx, &duration, argv[1]);
+    if(argc > 0) {
+        JS_ToUint32(ctx, &duration, argv[0]);
     }
     if(duration <= 0) {
         duration = switch_core_default_dtmf_duration(0);

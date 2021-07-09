@@ -47,10 +47,13 @@ typedef struct {
 
 void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx);
 
+// --------------------------------------------------------------------------------------------------------
 // session
 typedef struct {
-    switch_core_session_t   *session;
     uint8_t                 fl_hup;
+    switch_core_session_t   *session;
+    JSValue                 on_hangup;
+    switch_channel_state_t  hook_state;
 } js_session_t;
 
 JSClassID js_seesion_class_get_id();
@@ -60,12 +63,22 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
 
 // dtmf
 typedef struct {
-    switch_dtmf_t           *dtmf;
+    switch_dtmf_t       *dtmf;
 } js_dtmf_t;
 
 JSClassID js_dtmf_class_get_id();
 void js_dtmf_class_register_rt(JSRuntime *rt);
 switch_status_t js_dtmf_class_register_ctx(JSContext *ctx, JSValue global_obj);
 JSValue js_dtmf_object_create(JSContext *ctx, switch_dtmf_t *dtmf);
+
+// event
+typedef struct {
+    switch_event_t      *event;
+} js_event_t;
+
+JSClassID js_event_class_get_id();
+void js_event_class_register_rt(JSRuntime *rt);
+switch_status_t js_event_class_register_ctx(JSContext *ctx, JSValue global_obj);
+JSValue js_event_object_create(JSContext *ctx, switch_event_t *event);
 
 #endif

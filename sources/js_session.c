@@ -55,6 +55,7 @@ static JSClassID js_session_class_id;
 static void js_session_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
 static switch_status_t js_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen);
+static switch_status_t sys_session_hangup_hook(switch_core_session_t *session);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
@@ -105,64 +106,72 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
 static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
-    SESSION_SANITY_CHECK();
-
     return JS_ThrowTypeError(ctx, "Read only property!");
 }
 
-static JSValue js_session_api_originate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_originate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-
-
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
 
-static JSValue js_session_api_set_caller_data(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_set_caller_data(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
 
-static JSValue js_session_api_set_hangup_hook(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+
+    if(argc < 1 || !JS_IsFunction(ctx, argv[0])) {
+        return JS_ThrowTypeError(ctx, "Callback function not defiend");
+    }
+
+    //jss->on_hangup = JS_DupValue(ctx, argv[0]);
+    jss->on_hangup = argv[0];
+
+    jss->hook_state = switch_channel_get_state(channel);
+    switch_channel_set_private(channel, "jss", jss);
+    switch_core_event_hook_add_state_change(jss->session, sys_session_hangup_hook);
+
+    return JS_TRUE;
 }
 
-static JSValue js_session_api_set_auto_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_set_auto_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
     SESSION_SANITY_CHECK();
 
     if(argc >= 1) {
         int v = JS_ToBool(ctx, argv[0]);
-        if(v < 0) {
-            return JS_EXCEPTION;
-        }
+        if(v < 0) { return JS_EXCEPTION; }
         jss->fl_hup = v;
     }
     return JS_TRUE;
 }
 
-static JSValue js_session_api_say_phrase(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *sess = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
 
-static JSValue js_session_api_stream_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
 
-static JSValue js_session_api_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
 
-static JSValue js_session_api_collect_input(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
     input_callback_state_t cb_state = { 0 };
@@ -206,7 +215,7 @@ static JSValue js_session_api_collect_input(JSContext *ctx, JSValueConst this_va
     return JS_TRUE;
 }
 
-static JSValue  js_session_api_flush_events(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue  js_session_flush_events(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_event_t *event;
 
@@ -218,7 +227,7 @@ static JSValue  js_session_api_flush_events(JSContext *ctx, JSValueConst this_va
     return JS_TRUE;
 }
 
-static JSValue  js_session_api_flush_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue  js_session_flush_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
 
@@ -230,13 +239,13 @@ static JSValue  js_session_api_flush_digits(JSContext *ctx, JSValueConst this_va
     return JS_TRUE;
 }
 
-static JSValue  js_session_api_speak(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
 
-static JSValue js_session_api_set_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_set_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
 
@@ -259,7 +268,7 @@ static JSValue js_session_api_set_var(JSContext *ctx, JSValueConst this_val, int
     return JS_FALSE;
 }
 
-static JSValue js_session_api_get_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_get_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
 
@@ -287,7 +296,7 @@ static JSValue js_session_api_get_var(JSContext *ctx, JSValueConst this_val, int
     return JS_UNDEFINED;
 }
 
-static JSValue js_session_api_get_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_get_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
     const char *terminators = NULL;
@@ -328,7 +337,7 @@ static JSValue js_session_api_get_digits(JSContext *ctx, JSValueConst this_val, 
     return JS_UNDEFINED;
 }
 
-static JSValue js_session_api_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
 
@@ -341,7 +350,7 @@ static JSValue js_session_api_answer(JSContext *ctx, JSValueConst this_val, int 
     return JS_TRUE;
 }
 
-static JSValue js_session_api_pre_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_pre_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
 
@@ -354,13 +363,23 @@ static JSValue js_session_api_pre_answer(JSContext *ctx, JSValueConst this_val, 
     return JS_TRUE;
 }
 
-static JSValue js_session_api_generate_xml_cdr(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_generate_xml_cdr(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_xml_t cdr = NULL;
+    JSValue result = JS_UNDEFINED;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    if(switch_ivr_generate_xml_cdr(jss->session, &cdr) == SWITCH_STATUS_SUCCESS) {
+        char *xml_text;
+        if((xml_text = switch_xml_toxml(cdr, SWITCH_FALSE))) {
+            result = JS_NewString(ctx, xml_text);
+        }
+        switch_safe_free(xml_text);
+        switch_xml_free(cdr);
+    }
+    return result;
 }
 
-static JSValue js_session_api_is_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_is_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
     if(!jss || !jss->session) {
@@ -370,7 +389,7 @@ static JSValue js_session_api_is_ready(JSContext *ctx, JSValueConst this_val, in
     return (switch_channel_ready(switch_core_session_get_channel(jss->session)) ? JS_TRUE : JS_FALSE);
 }
 
-static JSValue js_session_api_is_answered(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_is_answered(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
     if(!jss || !jss->session) {
@@ -380,7 +399,7 @@ static JSValue js_session_api_is_answered(JSContext *ctx, JSValueConst this_val,
     return (switch_channel_test_flag(switch_core_session_get_channel(jss->session), CF_ANSWERED) ? JS_TRUE : JS_FALSE);
 }
 
-static JSValue js_session_api_is_media_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_is_media_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
     if(!jss || !jss->session) {
@@ -390,49 +409,161 @@ static JSValue js_session_api_is_media_ready(JSContext *ctx, JSValueConst this_v
     return (switch_channel_media_ready(switch_core_session_get_channel(jss->session)) ? JS_TRUE : JS_FALSE);
 }
 
-static JSValue js_session_api_wait_for_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_wait_for_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
+    switch_time_t started;
+    unsigned int elapsed;
+    uint32_t timeout = 60000;
+    JSValue result;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+    started = switch_micro_time_now();
+
+    if(argc > 0) {
+        JS_ToUint32(ctx, &timeout, argv[0]);
+        if(timeout < 1000) { timeout = 1000; }
+    }
+    while(SWITCH_TRUE) {
+        if(((elapsed = (unsigned int) ((switch_micro_time_now() - started) / 1000)) > (switch_time_t) timeout) || switch_channel_down(channel)) {
+            result = JS_FALSE;
+            break;
+        }
+        if(switch_channel_ready(channel) && switch_channel_test_flag(channel, CF_ANSWERED)) {
+            result = JS_TRUE;
+            break;
+        }
+        switch_cond_next();
+    }
+    return result;
 }
 
-static JSValue js_session_api_wait_for_media(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_wait_for_media(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
+    switch_time_t started;
+    unsigned int elapsed;
+    uint32_t timeout = 60000;
+    JSValue result;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+    CHANNEL_MEDIA_SANITY_CHECK();
+
+    started = switch_micro_time_now();
+    while(SWITCH_TRUE) {
+        if(((elapsed = (unsigned int) ((switch_micro_time_now() - started) / 1000)) > (switch_time_t) timeout) || switch_channel_down(channel)) {
+            result = JS_FALSE;
+            break;
+        }
+        if(switch_channel_ready(channel) && (switch_channel_test_flag(channel, CF_ANSWERED) || switch_channel_test_flag(channel, CF_EARLY_MEDIA))) {
+            result = JS_TRUE;
+            break;
+        }
+        switch_cond_next();
+    }
+    return result;
 }
 
-static JSValue js_session_api_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_event_t *event = NULL;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+
+    if(switch_core_session_dequeue_event(jss->session, &event, SWITCH_FALSE) == SWITCH_STATUS_SUCCESS) {
+        return js_event_object_create(ctx, event);
+    }
+
+    return JS_UNDEFINED;
 }
 
-static JSValue js_session_api_send_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_send_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+
+    if(argc > 0) {
+        if(JS_IsObject(argv[0])) {
+            js_event_t *js_event = JS_GetOpaque2(ctx, argv[0], js_event_class_get_id());
+
+            if(!js_event && !js_event->event) {
+                return JS_FALSE;
+            }
+            if(switch_core_session_receive_event(jss->session, &js_event->event) != SWITCH_STATUS_SUCCESS) {
+                return JS_FALSE;
+            }
+            //js_event->event = NULL
+        }
+    }
+    return JS_FALSE;
 }
 
-static JSValue js_session_api_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
+    const char *cause_name = NULL;
+    switch_call_cause_t cause = SWITCH_CAUSE_NORMAL_CLEARING;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+
+    if(switch_channel_up(channel)) {
+        if(argc > 1) {
+            if(JS_IsNumber(argv[0])) {
+                int32_t i = 0;
+                JS_ToUint32(ctx, &i, argv[0]);
+                cause = i;
+            } else {
+                cause_name = JS_ToCString(ctx, argv[0]);
+                cause = switch_channel_str2cause(cause_name);
+                JS_FreeCString(ctx, cause_name);
+            }
+        }
+        switch_channel_hangup(channel, cause);
+        switch_core_session_kill_channel(jss->session, SWITCH_SIG_KILL);
+
+        jss->hook_state = CS_HANGUP;
+        //check_hangup_hook(jss);
+
+        return JS_TRUE;
+    }
+    return JS_FALSE;
 }
 
-static JSValue js_session_api_execute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_execute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
+    JSValue result = JS_FALSE;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+
+    if(argc > 0) {
+        switch_application_interface_t *application_interface;
+        const char *app_name = JS_ToCString(ctx, argv[0]);
+        const char *app_arg = NULL;
+
+        if(argc > 1) {
+            app_arg = JS_ToCString(ctx, argv[1]);
+        }
+
+        if((application_interface = switch_loadable_module_get_application_interface(app_name))) {
+            if(application_interface->application_function) {
+                switch_core_session_exec(jss->session, application_interface, app_arg);
+                UNPROTECT_INTERFACE(application_interface);
+                result = JS_TRUE;
+            }
+        }
+        JS_FreeCString(ctx, app_name);
+        JS_FreeCString(ctx, app_arg);
+    }
+
+    return result;
 }
 
-static JSValue js_session_api_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
-}
-
-static JSValue js_session_api_sleep(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
     input_callback_state_t cb_state = { 0 };
@@ -480,8 +611,30 @@ static JSValue js_session_api_sleep(JSContext *ctx, JSValueConst this_val, int a
     return JS_TRUE;
 }
 
+static JSValue js_session_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+
+    return js_session_hangup(ctx, this_val, argc, argv);
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // callbacks
+static switch_status_t sys_session_hangup_hook(switch_core_session_t *session) {
+    switch_channel_t *channel = switch_core_session_get_channel(session);
+    switch_channel_state_t state = switch_channel_get_state(channel);
+    js_session_t *jss = NULL;
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "sys_hanguphook: state=%i\n", (int) state);
+
+    if(state == CS_HANGUP || state == CS_ROUTING) {
+        if((jss = switch_channel_get_private(channel, "jss"))) {
+            jss->hook_state = state;
+            //jss->check_state = 0;
+        }
+    }
+    return SWITCH_STATUS_SUCCESS;
+}
+
 static switch_status_t js_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
     switch_status_t status;
     input_callback_state_t *cb_state = buf;
@@ -536,49 +689,57 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("caller_id_name", js_session_property_get, js_session_property_set, SESSION_PROP_CALLER_ID_NAME),
     JS_CGETSET_MAGIC_DEF("caller_id_number", js_session_property_get, js_session_property_set, SESSION_PROP_CALLER_ID_NUMBER),
     //
-    JS_CFUNC_DEF("originate", 2, js_session_api_originate),
-    JS_CFUNC_DEF("setCallerData", 2, js_session_api_set_caller_data),
-    JS_CFUNC_DEF("setHangupHook", 1, js_session_api_set_hangup_hook),
-    JS_CFUNC_DEF("setAutoHangup", 1, js_session_api_set_auto_hangup),
-    JS_CFUNC_DEF("sayPhrase", 1, js_session_api_say_phrase),
-    JS_CFUNC_DEF("streamFile", 1, js_session_api_stream_file),
-    JS_CFUNC_DEF("recordFile", 1, js_session_api_record_file),
-    JS_CFUNC_DEF("collectInput", 1, js_session_api_collect_input),
-    JS_CFUNC_DEF("flushEvents", 1, js_session_api_flush_events),
-    JS_CFUNC_DEF("flushDigits", 1, js_session_api_flush_digits),
-    JS_CFUNC_DEF("speak", 1, js_session_api_speak),
-    JS_CFUNC_DEF("setVariable", 2, js_session_api_set_var),
-    JS_CFUNC_DEF("getVariable", 1, js_session_api_get_var),
-    JS_CFUNC_DEF("getDigits", 4, js_session_api_get_digits),
-    JS_CFUNC_DEF("answer", 0, js_session_api_answer),
-    JS_CFUNC_DEF("preAnswer", 0, js_session_api_pre_answer),
-    JS_CFUNC_DEF("generateXmlCdr", 0, js_session_api_generate_xml_cdr),
-    JS_CFUNC_DEF("ready", 0, js_session_api_is_ready),
-    JS_CFUNC_DEF("answered", 0, js_session_api_is_answered),
-    JS_CFUNC_DEF("mediaReady", 0, js_session_api_is_media_ready),
-    JS_CFUNC_DEF("waitForAnswer", 0, js_session_api_wait_for_answer),
-    JS_CFUNC_DEF("waitForMedia", 0, js_session_api_wait_for_media),
-    JS_CFUNC_DEF("getEvent", 0, js_session_api_get_event),
-    JS_CFUNC_DEF("sendEvent", 0, js_session_api_send_event),
-    JS_CFUNC_DEF("hangup", 0, js_session_api_hangup),
-    JS_CFUNC_DEF("execute", 0, js_session_api_execute),
-    JS_CFUNC_DEF("destroy", 0, js_session_api_destroy),
-    JS_CFUNC_DEF("sleep", 1, js_session_api_sleep),
+    JS_CFUNC_DEF("originate", 2, js_session_originate),
+    JS_CFUNC_DEF("setCallerData", 2, js_session_set_caller_data),
+    JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),       // ok
+    JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),       // ok
+    JS_CFUNC_DEF("sayPhrase", 1, js_session_say_phrase),
+    JS_CFUNC_DEF("streamFile", 1, js_session_stream_file),
+    JS_CFUNC_DEF("recordFile", 1, js_session_record_file),
+    JS_CFUNC_DEF("collectInput", 1, js_session_collect_input),          // ok
+    JS_CFUNC_DEF("flushEvents", 1, js_session_flush_events),            // ok
+    JS_CFUNC_DEF("flushDigits", 1, js_session_flush_digits),            // ok
+    JS_CFUNC_DEF("speak", 1, js_session_speak),
+    JS_CFUNC_DEF("setVariable", 2, js_session_set_var),                 // ok
+    JS_CFUNC_DEF("getVariable", 1, js_session_get_var),                 // ok
+    JS_CFUNC_DEF("getDigits", 4, js_session_get_digits),                // ok
+    JS_CFUNC_DEF("answer", 0, js_session_answer),                       // ok
+    JS_CFUNC_DEF("preAnswer", 0, js_session_pre_answer),                // ok
+    JS_CFUNC_DEF("generateXmlCdr", 0, js_session_generate_xml_cdr),     // ok
+    JS_CFUNC_DEF("ready", 0, js_session_is_ready),                      // ok
+    JS_CFUNC_DEF("answered", 0, js_session_is_answered),                // ok
+    JS_CFUNC_DEF("mediaReady", 0, js_session_is_media_ready),           // ok
+    JS_CFUNC_DEF("waitForAnswer", 0, js_session_wait_for_answer),       // ok
+    JS_CFUNC_DEF("waitForMedia", 0, js_session_wait_for_media),         // ok
+    JS_CFUNC_DEF("getEvent", 0, js_session_get_event),                  // ok
+    JS_CFUNC_DEF("sendEvent", 0, js_session_send_event),                // ok
+    JS_CFUNC_DEF("hangup", 0, js_session_hangup),                       // ok
+    JS_CFUNC_DEF("execute", 0, js_session_execute),                     // ok
+    JS_CFUNC_DEF("sleep", 1, js_session_sleep),                         // ok
+    JS_CFUNC_DEF("destroy", 0, js_session_destroy),                     // ok
 };
 
 static void js_session_finalizer(JSRuntime *rt, JSValue val) {
     js_session_t *jss = JS_GetOpaque(val, js_session_class_id);
 
-    if(!jss) { return; }
+    if(!jss) {
+        return;
+    }
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-session-finalizer: jss=%p, session=%p\n", jss, jss->session);
 
     if(jss->session) {
         switch_channel_t *channel = switch_core_session_get_channel(jss->session);
-        //switch_core_event_hook_remove_state_change(jss->session, js_hangup_hook);
+
+        switch_channel_set_private(channel, "jss", NULL);
+        switch_core_event_hook_remove_state_change(jss->session, sys_session_hangup_hook);
+
         if(jss->fl_hup) {
             switch_channel_hangup(channel, SWITCH_CAUSE_NORMAL_CLEARING);
         }
+
+        //JS_FreeValue(ctx, jss->on_hangup);
+
         switch_core_session_rwunlock(jss->session);
     }
     js_free_rt(rt, jss);
