@@ -44,17 +44,19 @@
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
-        JSValue function;
-        JSValue arg;
-        JSContext *ctx;
-        js_session_t *jss;
+    switch_file_handle_t *fh;
+    js_session_t *jss;
+    JSValue function;
+    JSValue arg;
 } input_callback_state_t;
 
 static JSClassID js_session_class_id;
 
 static void js_session_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
-static switch_status_t js_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen);
+static switch_status_t js_collect_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen);
+static switch_status_t js_playback_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen);
+static switch_status_t js_record_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen);
 static switch_status_t sys_session_hangup_hook(switch_core_session_t *session);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -126,49 +128,269 @@ static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val,
     SESSION_SANITY_CHECK();
     channel = switch_core_session_get_channel(jss->session);
 
-    if(argc < 1 || !JS_IsFunction(ctx, argv[0])) {
+    if(argc < 1) {
         return JS_ThrowTypeError(ctx, "Callback function not defiend");
     }
 
-    //jss->on_hangup = JS_DupValue(ctx, argv[0]);
-    jss->on_hangup = argv[0];
+    if(JS_IsUndefined(argv[0])) {
+        jss->fl_hup_hook = SWITCH_FALSE;
 
-    jss->hook_state = switch_channel_get_state(channel);
-    switch_channel_set_private(channel, "jss", jss);
-    switch_core_event_hook_add_state_change(jss->session, sys_session_hangup_hook);
+    } else if(JS_IsFunction(ctx, argv[0])) {
+        jss->on_hangup = argv[0];
+        jss->fl_hup_hook = SWITCH_TRUE;
+
+        switch_channel_set_private(channel, "jss", jss);
+        switch_core_event_hook_add_state_change(jss->session, sys_session_hangup_hook);
+    }
 
     return JS_TRUE;
 }
 
 static JSValue js_session_set_auto_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
 
-    if(argc >= 1) {
-        int v = JS_ToBool(ctx, argv[0]);
-        if(v < 0) { return JS_EXCEPTION; }
-        jss->fl_hup = v;
+    if(argc > 0) {
+        jss->fl_hup_auto = JS_ToBool(ctx, argv[0]);
     }
     return JS_TRUE;
 }
 
-static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *sess = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    const char *js_tts_name = NULL, *js_tts_voice = NULL;
+    const char *ch_tts_name = NULL, *ch_tts_voice = NULL;
+    const char *tts_text = NULL;
+    switch_channel_t *channel = NULL;
+    input_callback_state_t cb_state = { 0 };
+    switch_input_args_t args = { 0 };
+    switch_input_callback_function_t dtmf_func = NULL;
+    void *bp = NULL;
+    int len = 0;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+    CHANNEL_SANITY_CHECK();
+    CHANNEL_MEDIA_SANITY_CHECK();
+
+    if(argc < 1) {
+        return JS_FALSE;
+    }
+
+    js_tts_name = JS_ToCString(ctx, argv[0]);
+    if(zstr(js_tts_name)) {
+        ch_tts_name = switch_channel_get_variable(channel, "tts_engine");
+        if(zstr(ch_tts_name)) {
+            return JS_ThrowTypeError(ctx, "Invalid parameter: TTS Name");
+        }
+    }
+
+    js_tts_voice = JS_ToCString(ctx, argv[1]);
+    if(zstr(js_tts_voice)) {
+         ch_tts_voice = switch_channel_get_variable(channel, "tts_voice");
+            if(zstr(ch_tts_name)) {
+                JS_FreeCString(ctx, js_tts_voice);
+                return JS_ThrowTypeError(ctx, "Invalid parameter: TTS Voice");
+            }
+    }
+
+    tts_text = JS_ToCString(ctx, argv[2]);
+    if(zstr(tts_text)) {
+        JS_FreeCString(ctx, js_tts_name);
+        JS_FreeCString(ctx, js_tts_voice);
+        return JS_ThrowTypeError(ctx, "Invalid parameter: TTS Text");
+    }
+
+    if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
+        memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss = jss;
+        cb_state.arg = (argc > 4 ? argv[4] : JS_UNDEFINED);
+        cb_state.function = argv[3];
+
+        dtmf_func = js_collect_input_callback;
+        bp = &cb_state;
+        len = sizeof(cb_state);
+    }
+
+    args.input_callback = dtmf_func;
+    args.buf = bp;
+    args.buflen = len;
+
+    switch_ivr_speak_text(jss->session, (js_tts_name ? js_tts_name : ch_tts_name), (js_tts_voice ? js_tts_voice : ch_tts_voice), tts_text, &args);
+
+    JS_FreeCString(ctx, js_tts_name);
+    JS_FreeCString(ctx, js_tts_voice);
+    JS_FreeCString(ctx, tts_text);
+
+    return JS_TRUE;
+}
+
+static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
+    const char *phrase_name = NULL, *phrase_data = NULL, *phrase_lang = NULL;
+    input_callback_state_t cb_state = { 0 };
+    switch_input_args_t args = { 0 };
+    switch_input_callback_function_t dtmf_func = NULL;
+    void *bp = NULL;
+    int len = 0;
+
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+    CHANNEL_SANITY_CHECK();
+    CHANNEL_MEDIA_SANITY_CHECK();
+
+    if(argc > 0) {
+        phrase_name = JS_ToCString(ctx, argv[0]);
+        if(zstr(phrase_name)) { return JS_FALSE; }
+    }
+    if(argc > 1) {
+        phrase_data = JS_ToCString(ctx, argv[1]);
+    }
+    if(argc > 2) {
+        phrase_lang = JS_ToCString(ctx, argv[2]);
+    }
+    if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
+        memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss = jss;
+        cb_state.arg = (argc > 4 ? argv[4] : JS_UNDEFINED);
+        cb_state.function = argv[3];
+
+        dtmf_func = js_collect_input_callback;
+        bp = &cb_state;
+        len = sizeof(cb_state);
+    }
+
+    args.input_callback = dtmf_func;
+    args.buf = bp;
+    args.buflen = len;
+
+    switch_ivr_phrase_macro(jss->session, phrase_name, phrase_data, phrase_lang, &args);
+
+    JS_FreeCString(ctx, phrase_name);
+    JS_FreeCString(ctx, phrase_data);
+    JS_FreeCString(ctx, phrase_lang);
+
+    return JS_TRUE;
 }
 
 static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
+    const char *file_name = NULL;
+    const char *prebuf = NULL;
+    char posbuf[64] = "";
+    input_callback_state_t cb_state = { 0 };
+    switch_file_handle_t fh = { 0 };
+    switch_input_args_t args = { 0 };
+    switch_input_callback_function_t dtmf_func = NULL;
+    uint32_t len = 0;
+    void *bp = NULL;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+    CHANNEL_SANITY_CHECK();
+    CHANNEL_MEDIA_SANITY_CHECK();
+
+    if(argc > 0) {
+        file_name = JS_ToCString(ctx, argv[0]);
+        if(zstr(file_name)) { return JS_FALSE; }
+    }
+    if(argc > 1) {
+        if(JS_IsFunction(ctx, argv[1])) {
+            memset(&cb_state, 0, sizeof(cb_state));
+            cb_state.jss = jss;
+            cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
+            cb_state.function = argv[1];
+
+            dtmf_func = js_playback_input_callback;
+            bp = &cb_state;
+            len = sizeof(cb_state);
+        }
+    }
+    if(argc > 3) {
+        uint32_t samps;
+        JS_ToUint32(ctx, &samps, argv[3]);
+        fh.samples = samps;
+    }
+
+    if((prebuf = switch_channel_get_variable(channel, "stream_prebuffer"))) {
+        int maybe = atoi(prebuf);
+        if(maybe > 0) { fh.prebuf = maybe; }
+    }
+
+    cb_state.fh = &fh;
+    args.input_callback = dtmf_func;
+    args.buf = bp;
+    args.buflen = len;
+
+    switch_ivr_play_file(jss->session, &fh, file_name, &args);
+    JS_FreeCString(ctx, file_name);
+
+    switch_snprintf(posbuf, sizeof(posbuf), "%u", fh.offset_pos);
+    switch_channel_set_variable(channel, "last_file_position", posbuf);
+
+    return JS_TRUE;
 }
 
 static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
+    const char *file_name = NULL;
+    input_callback_state_t cb_state = { 0 };
+    switch_file_handle_t fh = { 0 };
+    switch_input_args_t args = { 0 };
+    switch_input_callback_function_t dtmf_func = NULL;
+    uint32_t limit = 0, len = 0;
+    void *bp = NULL;
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+    CHANNEL_SANITY_CHECK();
+    CHANNEL_MEDIA_SANITY_CHECK();
+
+    if(argc > 0) {
+        file_name = JS_ToCString(ctx, argv[0]);
+        if(zstr(file_name)) { return JS_FALSE; }
+    }
+    if(argc > 1) {
+        if(JS_IsFunction(ctx, argv[1])) {
+            memset(&cb_state, 0, sizeof(cb_state));
+            cb_state.jss = jss;
+            cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
+            cb_state.function = argv[1];
+
+            dtmf_func = js_record_input_callback;
+            bp = &cb_state;
+            len = sizeof(cb_state);
+        }
+        if(argc > 3) {
+            JS_ToUint32(ctx, &limit, argv[3]);
+        }
+        if(argc > 4) {
+            uint32_t thresh;
+            JS_ToUint32(ctx, &thresh, argv[4]);
+            fh.thresh = thresh;
+        }
+        if(argc > 5) {
+            uint32_t silence_hits;
+            JS_ToUint32(ctx, &silence_hits, argv[5]);
+            fh.silence_hits = silence_hits;
+        }
+    }
+
+    cb_state.fh = &fh;
+    args.input_callback = dtmf_func;
+    args.buf = bp;
+    args.buflen = len;
+
+    switch_ivr_record_file(jss->session, &fh, file_name, &args, limit);
+    JS_FreeCString(ctx, file_name);
+
+    return JS_TRUE;
 }
 
 static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -191,12 +413,11 @@ static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, i
             return JS_ThrowTypeError(ctx, "Callback function not defiend");
         }
         memset(&cb_state, 0, sizeof(cb_state));
-        cb_state.ctx = ctx;
         cb_state.jss = jss;
         cb_state.arg = (argc > 1 ? argv[1] : JS_UNDEFINED);
-        cb_state.function = JS_DupValue(ctx, argv[0]);
+        cb_state.function = argv[0];
 
-        dtmf_func = js_input_callback;
+        dtmf_func = js_collect_input_callback;
         bp = &cb_state;
         len = sizeof(cb_state);
     }
@@ -212,6 +433,7 @@ static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, i
     args.buflen = len;
 
     switch_ivr_collect_digits_callback(jss->session, &args, digit_timeout, abs_timeout);
+
     return JS_TRUE;
 }
 
@@ -239,12 +461,6 @@ static JSValue  js_session_flush_digits(JSContext *ctx, JSValueConst this_val, i
     return JS_TRUE;
 }
 
-static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
-}
-
 static JSValue js_session_set_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
@@ -265,6 +481,7 @@ static JSValue js_session_set_var(JSContext *ctx, JSValueConst this_val, int arg
 
         return JS_TRUE;
     }
+
     return JS_FALSE;
 }
 
@@ -293,6 +510,7 @@ static JSValue js_session_get_var(JSContext *ctx, JSValueConst this_val, int arg
             }
         }
     }
+
     return JS_UNDEFINED;
 }
 
@@ -334,6 +552,7 @@ static JSValue js_session_get_digits(JSContext *ctx, JSValueConst this_val, int 
         JS_FreeCString(ctx, terminators);
         return result;
     }
+
     return JS_UNDEFINED;
 }
 
@@ -376,6 +595,7 @@ static JSValue js_session_generate_xml_cdr(JSContext *ctx, JSValueConst this_val
         switch_safe_free(xml_text);
         switch_xml_free(cdr);
     }
+
     return result;
 }
 
@@ -425,6 +645,7 @@ static JSValue js_session_wait_for_answer(JSContext *ctx, JSValueConst this_val,
         JS_ToUint32(ctx, &timeout, argv[0]);
         if(timeout < 1000) { timeout = 1000; }
     }
+
     while(SWITCH_TRUE) {
         if(((elapsed = (unsigned int) ((switch_micro_time_now() - started) / 1000)) > (switch_time_t) timeout) || switch_channel_down(channel)) {
             result = JS_FALSE;
@@ -436,6 +657,7 @@ static JSValue js_session_wait_for_answer(JSContext *ctx, JSValueConst this_val,
         }
         switch_cond_next();
     }
+
     return result;
 }
 
@@ -463,6 +685,7 @@ static JSValue js_session_wait_for_media(JSContext *ctx, JSValueConst this_val, 
         }
         switch_cond_next();
     }
+
     return result;
 }
 
@@ -497,6 +720,7 @@ static JSValue js_session_send_event(JSContext *ctx, JSValueConst this_val, int 
             //js_event->event = NULL
         }
     }
+
     return JS_FALSE;
 }
 
@@ -524,11 +748,9 @@ static JSValue js_session_hangup(JSContext *ctx, JSValueConst this_val, int argc
         switch_channel_hangup(channel, cause);
         switch_core_session_kill_channel(jss->session, SWITCH_SIG_KILL);
 
-        jss->hook_state = CS_HANGUP;
-        //check_hangup_hook(jss);
-
         return JS_TRUE;
     }
+
     return JS_FALSE;
 }
 
@@ -587,12 +809,11 @@ static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc,
     if(argc > 1) {
         if(JS_IsFunction(ctx, argv[1])) {
             memset(&cb_state, 0, sizeof(cb_state));
-            cb_state.ctx = ctx;
             cb_state.jss = jss;
             cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
-            cb_state.function = JS_DupValue(ctx, argv[1]);
+            cb_state.function = argv[1];
 
-            dtmf_func = js_input_callback;
+            dtmf_func = js_collect_input_callback;
             bp = &cb_state;
             len = sizeof(cb_state);
         }
@@ -603,10 +824,6 @@ static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc,
     args.buflen = len;
 
     switch_ivr_sleep(jss->session, msec, SWITCH_FALSE, &args);
-
-    if(len > 0) {
-        JS_FreeValue(ctx, cb_state.function);
-    }
 
     return JS_TRUE;
 }
@@ -623,33 +840,87 @@ static switch_status_t sys_session_hangup_hook(switch_core_session_t *session) {
     switch_channel_t *channel = switch_core_session_get_channel(session);
     switch_channel_state_t state = switch_channel_get_state(channel);
     js_session_t *jss = NULL;
-
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "sys_hanguphook: state=%i\n", (int) state);
+    JSContext *ctx = NULL;
+    JSValue args[1] = { 0 };
+    JSValue ret_val;
 
     if(state == CS_HANGUP || state == CS_ROUTING) {
         if((jss = switch_channel_get_private(channel, "jss"))) {
-            jss->hook_state = state;
-            //jss->check_state = 0;
+            ctx = jss->ctx;
+            if(jss->fl_hup_hook && JS_IsFunction(ctx, jss->on_hangup)) {
+                args[0] = JS_NewInt32(ctx, state);
+                ret_val = JS_Call(ctx, jss->on_hangup, JS_UNDEFINED, 1, (JSValueConst *) args);
+                if(JS_IsException(ret_val)) {
+                    ctx_dump_error(NULL, NULL, ctx);
+                }
+                JS_FreeValue(ctx, args[0]);
+            }
         }
     }
+
     return SWITCH_STATUS_SUCCESS;
 }
 
-static switch_status_t js_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
+static switch_status_t js_record_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
     switch_status_t status;
     input_callback_state_t *cb_state = buf;
     js_session_t *jss = cb_state->jss;
-    JSContext *ctx = cb_state->ctx;
+    JSContext *ctx = (jss ? jss->ctx : NULL);
     JSValue args[3] = { 0 };
     JSValue ret_val;
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_input_callback: itype=%i, jss=%p\n", (int) itype, jss);
+    if(itype == SWITCH_INPUT_TYPE_DTMF) {
+
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_record_input_callback: itype=%i, jss=%p\n", (int) itype, jss);
+
+    }
+
+    return SWITCH_STATUS_SUCCESS;
+}
+
+static switch_status_t js_playback_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
+    switch_status_t status;
+    input_callback_state_t *cb_state = buf;
+    js_session_t *jss = cb_state->jss;
+    JSContext *ctx = (jss ? jss->ctx : NULL);
+    JSValue args[3] = { 0 };
+    JSValue ret_val;
+
+    if(itype == SWITCH_INPUT_TYPE_DTMF) {
+
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_playback_input_callback: itype=%i, jss=%p\n", (int) itype, jss);
+
+    }
+
+    return SWITCH_STATUS_SUCCESS;
+}
+
+static switch_status_t js_collect_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
+    switch_status_t status;
+    input_callback_state_t *cb_state = buf;
+    js_session_t *jss = cb_state->jss;
+    JSContext *ctx = (jss ? jss->ctx : NULL);
+    JSValue args[3] = { 0 };
+    JSValue ret_val;
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_collect_input_callback: itype=%i, jss=%p\n", (int) itype, jss);
 
     switch(itype) {
         case SWITCH_INPUT_TYPE_EVENT: {
-            //
-            // todo
-            //
+            if(input) {
+                args[0] = js_event_object_create(ctx, (switch_event_t *)input);
+                args[1] = JS_NewString(ctx, "event");
+                args[2] = cb_state->arg;
+
+                ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 3, (JSValueConst *) args);
+                if(JS_IsException(ret_val)) {
+                    ctx_dump_error(NULL, NULL, ctx);
+                }
+
+                JS_FreeValue(ctx, args[0]);
+                JS_FreeValue(ctx, args[1]);
+                JS_FreeValue(ctx, ret_val);
+            }
             break;
         }
         case SWITCH_INPUT_TYPE_DTMF: {
@@ -668,9 +939,9 @@ static switch_status_t js_input_callback(switch_core_session_t *session, void *i
             break;
         }
     }
+
     return SWITCH_STATUS_SUCCESS;
 }
-
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSClassDef js_session_class = {
@@ -693,13 +964,13 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("setCallerData", 2, js_session_set_caller_data),
     JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),       // ok
     JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),       // ok
-    JS_CFUNC_DEF("sayPhrase", 1, js_session_say_phrase),
-    JS_CFUNC_DEF("streamFile", 1, js_session_stream_file),
-    JS_CFUNC_DEF("recordFile", 1, js_session_record_file),
+    JS_CFUNC_DEF("speak", 1, js_session_speak),                         // ok
+    JS_CFUNC_DEF("sayPhrase", 1, js_session_say_phrase),                // ok
+    JS_CFUNC_DEF("streamFile", 1, js_session_stream_file),              // ok
+    JS_CFUNC_DEF("recordFile", 1, js_session_record_file),              // ok
     JS_CFUNC_DEF("collectInput", 1, js_session_collect_input),          // ok
     JS_CFUNC_DEF("flushEvents", 1, js_session_flush_events),            // ok
     JS_CFUNC_DEF("flushDigits", 1, js_session_flush_digits),            // ok
-    JS_CFUNC_DEF("speak", 1, js_session_speak),
     JS_CFUNC_DEF("setVariable", 2, js_session_set_var),                 // ok
     JS_CFUNC_DEF("getVariable", 1, js_session_get_var),                 // ok
     JS_CFUNC_DEF("getDigits", 4, js_session_get_digits),                // ok
@@ -734,11 +1005,9 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
         switch_channel_set_private(channel, "jss", NULL);
         switch_core_event_hook_remove_state_change(jss->session, sys_session_hangup_hook);
 
-        if(jss->fl_hup) {
+        if(jss->fl_hup_auto) {
             switch_channel_hangup(channel, SWITCH_CAUSE_NORMAL_CLEARING);
         }
-
-        //JS_FreeValue(ctx, jss->on_hangup);
 
         switch_core_session_rwunlock(jss->session);
     }
@@ -764,14 +1033,14 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
         uuid = JS_ToCString(ctx, argv[0]);
         if(!strchr(uuid, '/')) {
             jss->session = switch_core_session_locate(uuid);
-            jss->fl_hup = SWITCH_TRUE;
+            jss->fl_hup_auto = SWITCH_TRUE;
         } else {
              if(argc > 1) {
                 if(JS_IsObject(argv[1])) {
                     jss_old = JS_GetOpaque2(ctx, argv[1], js_session_class_id);
                 }
                 if(switch_ivr_originate((jss_old ? jss_old->session : NULL), &jss->session, &h_cause, uuid, 60, NULL, NULL, NULL, NULL, NULL, SOF_NONE, NULL, NULL) == SWITCH_STATUS_SUCCESS) {
-                    jss->fl_hup = SWITCH_TRUE;
+                    jss->fl_hup_auto = SWITCH_TRUE;
                     switch_channel_set_state(switch_core_session_get_channel(jss->session), CS_SOFT_EXECUTE);
                     switch_channel_wait_for_state_timeout(switch_core_session_get_channel(jss->session), CS_SOFT_EXECUTE, 5000);
                 } else {
@@ -791,6 +1060,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
+    jss->ctx = ctx;
     JS_SetOpaque(obj, jss);
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-session-constructor: jss=%p, session=%p\n", jss, jss->session);
@@ -848,6 +1118,7 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
 
     if(JS_IsException(obj)) { return obj; }
 
+    jss->ctx = ctx;
     jss->session = session;
     JS_SetOpaque(obj, jss);
 

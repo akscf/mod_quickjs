@@ -42,7 +42,6 @@ typedef struct {
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
     switch_inthash_t        *instances_map;
-
 } script_t;
 
 void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx);
@@ -50,10 +49,11 @@ void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ct
 // --------------------------------------------------------------------------------------------------------
 // session
 typedef struct {
-    uint8_t                 fl_hup;
+    uint8_t                 fl_hup_auto;
+    uint8_t                 fl_hup_hook;
     switch_core_session_t   *session;
     JSValue                 on_hangup;
-    switch_channel_state_t  hook_state;
+    JSContext               *ctx;
 } js_session_t;
 
 JSClassID js_seesion_class_get_id();

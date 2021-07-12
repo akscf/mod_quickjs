@@ -8,7 +8,7 @@ static struct {
     switch_mutex_t          *mutex;
     switch_mutex_t          *mutex_scripts;
     switch_inthash_t        *scripts_map;
-    switch_mutex_t          *mutex_qjsrt;
+    switch_mutex_t          *mutex_rt;
     JSRuntime               *qjs_rt;
     uint8_t                 fl_ready;
     uint8_t                 fl_shutdown;
@@ -565,9 +565,9 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
         goto out;
     }
 
-    switch_mutex_lock(globals.mutex_qjsrt);
+    switch_mutex_lock(globals.mutex_rt);
     script_instance->ctx = JS_NewContext(globals.qjs_rt);
-    switch_mutex_unlock(globals.mutex_qjsrt);
+    switch_mutex_unlock(globals.mutex_rt);
 
     if(!script_instance->ctx) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create ctx\n");
@@ -755,7 +755,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     switch_core_inthash_init(&globals.scripts_map);
     switch_mutex_init(&globals.mutex, SWITCH_MUTEX_NESTED, pool);
     switch_mutex_init(&globals.mutex_scripts, SWITCH_MUTEX_NESTED, pool);
-    switch_mutex_init(&globals.mutex_qjsrt, SWITCH_MUTEX_NESTED, pool);
+    switch_mutex_init(&globals.mutex_rt, SWITCH_MUTEX_NESTED, pool);
 
     /* quickjs */
     globals.qjs_rt = JS_NewRuntime();
