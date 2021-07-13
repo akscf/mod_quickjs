@@ -19,7 +19,7 @@ static void js_dtmf_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_dtmf_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_dtmf_t *js_dtmf = JS_GetOpaque2(ctx, this_val, js_dtmf_class_id);
 
-    if(!js_dtmf && !js_dtmf->dtmf) {
+    if(!js_dtmf || !js_dtmf->dtmf) {
         return JS_UNDEFINED;
     }
 

@@ -44,10 +44,11 @@
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
-    switch_file_handle_t *fh;
-    js_session_t *jss;
-    JSValue function;
-    JSValue arg;
+    js_session_t    *jss;
+    JSValue         fh_obj;
+    JSValue         jss_obj;
+    JSValue         arg;
+    JSValue         function;
 } input_callback_state_t;
 
 static JSClassID js_session_class_id;
@@ -113,6 +114,9 @@ static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JS
 
 static JSValue js_session_originate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+
+
+
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
 
@@ -205,6 +209,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
 
     if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
         memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss_obj = this_val;
         cb_state.jss = jss;
         cb_state.arg = (argc > 4 ? argv[4] : JS_UNDEFINED);
         cb_state.function = argv[3];
@@ -254,6 +259,7 @@ static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int 
     }
     if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
         memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss_obj = this_val;
         cb_state.jss = jss;
         cb_state.arg = (argc > 4 ? argv[4] : JS_UNDEFINED);
         cb_state.function = argv[3];
@@ -304,6 +310,7 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
             cb_state.jss = jss;
             cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
             cb_state.function = argv[1];
+            cb_state.fh_obj = js_file_handle_object_create(ctx, &fh, jss->session);
 
             dtmf_func = js_playback_input_callback;
             bp = &cb_state;
@@ -321,12 +328,13 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
         if(maybe > 0) { fh.prebuf = maybe; }
     }
 
-    cb_state.fh = &fh;
     args.input_callback = dtmf_func;
     args.buf = bp;
     args.buflen = len;
 
     switch_ivr_play_file(jss->session, &fh, file_name, &args);
+
+    JS_FreeValue(ctx, cb_state.fh_obj);
     JS_FreeCString(ctx, file_name);
 
     switch_snprintf(posbuf, sizeof(posbuf), "%u", fh.offset_pos);
@@ -362,6 +370,7 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
             cb_state.jss = jss;
             cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
             cb_state.function = argv[1];
+            cb_state.fh_obj = js_file_handle_object_create(ctx, &fh, jss->session);
 
             dtmf_func = js_record_input_callback;
             bp = &cb_state;
@@ -382,12 +391,13 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
         }
     }
 
-    cb_state.fh = &fh;
     args.input_callback = dtmf_func;
     args.buf = bp;
     args.buflen = len;
 
     switch_ivr_record_file(jss->session, &fh, file_name, &args, limit);
+
+    JS_FreeValue(ctx, cb_state.fh_obj);
     JS_FreeCString(ctx, file_name);
 
     return JS_TRUE;
@@ -413,6 +423,7 @@ static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, i
             return JS_ThrowTypeError(ctx, "Callback function not defiend");
         }
         memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss_obj = this_val;
         cb_state.jss = jss;
         cb_state.arg = (argc > 1 ? argv[1] : JS_UNDEFINED);
         cb_state.function = argv[0];
@@ -806,17 +817,16 @@ static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc,
         return JS_FALSE;
     }
 
-    if(argc > 1) {
-        if(JS_IsFunction(ctx, argv[1])) {
-            memset(&cb_state, 0, sizeof(cb_state));
-            cb_state.jss = jss;
-            cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
-            cb_state.function = argv[1];
+    if(argc > 1 && JS_IsFunction(ctx, argv[1]) ) {
+        memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss_obj = this_val;
+        cb_state.jss = jss;
+        cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
+        cb_state.function = argv[1];
 
-            dtmf_func = js_collect_input_callback;
-            bp = &cb_state;
-            len = sizeof(cb_state);
-        }
+        dtmf_func = js_collect_input_callback;
+        bp = &cb_state;
+        len = sizeof(cb_state);
     }
 
     args.input_callback = dtmf_func;
@@ -866,13 +876,23 @@ static switch_status_t js_record_input_callback(switch_core_session_t *session, 
     input_callback_state_t *cb_state = buf;
     js_session_t *jss = cb_state->jss;
     JSContext *ctx = (jss ? jss->ctx : NULL);
-    JSValue args[3] = { 0 };
+    JSValue args[4] = { 0 };
     JSValue ret_val;
 
     if(itype == SWITCH_INPUT_TYPE_DTMF) {
+        args[0] = cb_state->fh_obj;
+        args[1] = js_dtmf_object_create(ctx, (switch_dtmf_t *) input);
+        args[2] = JS_NewString(ctx, "dtmf");
+        args[3] = cb_state->arg;
 
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_record_input_callback: itype=%i, jss=%p\n", (int) itype, jss);
+        ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
+        if(JS_IsException(ret_val)) {
+            ctx_dump_error(NULL, NULL, ctx);
+        }
 
+        JS_FreeValue(ctx, args[1]);
+        JS_FreeValue(ctx, args[2]);
+        JS_FreeValue(ctx, ret_val);
     }
 
     return SWITCH_STATUS_SUCCESS;
@@ -883,13 +903,23 @@ static switch_status_t js_playback_input_callback(switch_core_session_t *session
     input_callback_state_t *cb_state = buf;
     js_session_t *jss = cb_state->jss;
     JSContext *ctx = (jss ? jss->ctx : NULL);
-    JSValue args[3] = { 0 };
+    JSValue args[4] = { 0 };
     JSValue ret_val;
 
     if(itype == SWITCH_INPUT_TYPE_DTMF) {
+        args[0] = cb_state->fh_obj;
+        args[1] = js_dtmf_object_create(ctx, (switch_dtmf_t *) input);
+        args[2] = JS_NewString(ctx, "dtmf");
+        args[3] = cb_state->arg;
 
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_playback_input_callback: itype=%i, jss=%p\n", (int) itype, jss);
+        ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
+        if(JS_IsException(ret_val)) {
+            ctx_dump_error(NULL, NULL, ctx);
+        }
 
+        JS_FreeValue(ctx, args[1]);
+        JS_FreeValue(ctx, args[2]);
+        JS_FreeValue(ctx, ret_val);
     }
 
     return SWITCH_STATUS_SUCCESS;
@@ -900,44 +930,23 @@ static switch_status_t js_collect_input_callback(switch_core_session_t *session,
     input_callback_state_t *cb_state = buf;
     js_session_t *jss = cb_state->jss;
     JSContext *ctx = (jss ? jss->ctx : NULL);
-    JSValue args[3] = { 0 };
+    JSValue args[4] = { 0 };
     JSValue ret_val;
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js_collect_input_callback: itype=%i, jss=%p\n", (int) itype, jss);
+    if(itype == SWITCH_INPUT_TYPE_DTMF) {
+        args[0] = cb_state->jss_obj;
+        args[1] = js_dtmf_object_create(ctx, (switch_dtmf_t *) input);
+        args[2] = JS_NewString(ctx, "dtmf");
+        args[3] = cb_state->arg;
 
-    switch(itype) {
-        case SWITCH_INPUT_TYPE_EVENT: {
-            if(input) {
-                args[0] = js_event_object_create(ctx, (switch_event_t *)input);
-                args[1] = JS_NewString(ctx, "event");
-                args[2] = cb_state->arg;
-
-                ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 3, (JSValueConst *) args);
-                if(JS_IsException(ret_val)) {
-                    ctx_dump_error(NULL, NULL, ctx);
-                }
-
-                JS_FreeValue(ctx, args[0]);
-                JS_FreeValue(ctx, args[1]);
-                JS_FreeValue(ctx, ret_val);
-            }
-            break;
+        ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
+        if(JS_IsException(ret_val)) {
+            ctx_dump_error(NULL, NULL, ctx);
         }
-        case SWITCH_INPUT_TYPE_DTMF: {
-            args[0] = js_dtmf_object_create(ctx, (switch_dtmf_t *) input);
-            args[1] = JS_NewString(ctx, "dtmf");
-            args[2] = cb_state->arg;
 
-            ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 3, (JSValueConst *) args);
-            if(JS_IsException(ret_val)) {
-                ctx_dump_error(NULL, NULL, ctx);
-            }
-
-            JS_FreeValue(ctx, args[0]);
-            JS_FreeValue(ctx, args[1]);
-            JS_FreeValue(ctx, ret_val);
-            break;
-        }
+        JS_FreeValue(ctx, args[1]);
+        JS_FreeValue(ctx, args[2]);
+        JS_FreeValue(ctx, ret_val);
     }
 
     return SWITCH_STATUS_SUCCESS;

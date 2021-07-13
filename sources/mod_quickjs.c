@@ -210,10 +210,12 @@ static JSValue js_api_execute(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    void *bp = NULL;
-    switch_input_callback_function_t dtmf_func = NULL;
     js_session_t *jss_a = NULL, *jss_b = NULL;
-    JSValue js_cb_fnc;
+    //input_callback_state_t cb_state = { 0 };
+    //switch_input_args_t args = { 0 };
+    //switch_input_callback_function_t dtmf_func = NULL;
+    //int len = 0;
+    //void *bp = NULL;
 
     if(argc >= 2) {
         jss_a = JS_GetOpaque(argv[0], js_seesion_class_get_id());
@@ -226,13 +228,18 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
             return JS_ThrowTypeError(ctx, "Session B is not ready");
         }
 
-        /*if(argc >= 3) {
-            if(JS_IsFunction(ctx, argv[2])) {
-                // js_cb_fnc = JS_DupValue(ctx, argv[2]);
-            }
-        }*/
+        /*if(argc > 2 && JS_IsFunction(ctx, argv[2])) {
+            memset(&cb_state, 0, sizeof(cb_state));
+            cb_state.jss = jss;
+            cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
+            cb_state.function = argv[1];
 
-        switch_ivr_multi_threaded_bridge(jss_a->session, jss_b->session, dtmf_func, bp, bp);
+            dtmf_func = js_collect_input_callback;
+            bp = &cb_state;
+            len = sizeof(cb_state);
+        }
+
+        switch_ivr_multi_threaded_bridge(jss_a->session, jss_b->session, dtmf_func, bp, bp);*/
     }
     return JS_FALSE;
 }
@@ -385,6 +392,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     global_obj = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global_obj, "script_id", JS_NewInt32(ctx, script_instance->id));
     js_session_class_register_ctx(ctx, global_obj);
+    js_file_handle_class_register_ctx(ctx, global_obj);
     js_event_class_register_ctx(ctx, global_obj);
     js_dtmf_class_register_ctx(ctx, global_obj);
 
@@ -766,8 +774,10 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     JS_SetCanBlock(globals.qjs_rt, 1);
     JS_SetRuntimeInfo(globals.qjs_rt, "mod_quickjs");
     js_session_class_register_rt(globals.qjs_rt);
+    js_file_handle_class_register_rt(globals.qjs_rt);
     js_event_class_register_rt(globals.qjs_rt);
     js_dtmf_class_register_rt(globals.qjs_rt);
+
 
     /* xml config */
     if((xml = switch_xml_open_cfg(CONFIG_NAME, &cfg, NULL)) == NULL) {
