@@ -6,16 +6,16 @@
  **/
 #include "mod_quickjs.h"
 
-#define SESSION_CLASS_NAME                  "Session"
-#define SESSION_PROP_NAME                   0
-#define SESSION_PROP_UUID                   1
-#define SESSION_PROP_STATE                  2
-#define SESSION_PROP_CAUSE                  3
-#define SESSION_PROP_CAUSECODE              4
-#define SESSION_PROP_CALLER_ID_NAME         5
-#define SESSION_PROP_CALLER_ID_NUMBER       6
-#define SESSION_PROP_PROFILE_DIALPLAN       7
-#define SESSION_PROP_PROFILE_DESTINATION    8
+#define CLASS_NAME                  "Session"
+#define PROP_NAME                   0
+#define PROP_UUID                   1
+#define PROP_STATE                  2
+#define PROP_CAUSE                  3
+#define PROP_CAUSECODE              4
+#define PROP_CALLER_ID_NAME         5
+#define PROP_CALLER_ID_NUMBER       6
+#define PROP_PROFILE_DIALPLAN       7
+#define PROP_PROFILE_DESTINATION    8
 
 #define SESSION_SANITY_CHECK() if (!jss || !jss->session) { \
            return JS_ThrowTypeError(ctx, "Session is not initialized"); \
@@ -49,6 +49,10 @@ typedef struct {
     JSValue         jss_obj;
     JSValue         arg;
     JSValue         function;
+    js_session_t    *jss_a;
+    js_session_t    *jss_b;
+    JSValue         jss_a_obj;
+    JSValue         jss_b_obj;
 } input_callback_state_t;
 
 static JSClassID js_session_class_id;
@@ -72,34 +76,34 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
     caller_profile = switch_channel_get_caller_profile(channel);
 
     switch(magic) {
-        case SESSION_PROP_NAME:
+        case PROP_NAME:
             return JS_NewString(ctx, switch_channel_get_name(channel));
 
-        case SESSION_PROP_UUID:
+        case PROP_UUID:
             return JS_NewString(ctx, switch_channel_get_uuid(channel));
 
-        case SESSION_PROP_STATE:
+        case PROP_STATE:
             return JS_NewString(ctx, switch_channel_state_name(switch_channel_get_state(channel)) );
 
-        case SESSION_PROP_CAUSE:
+        case PROP_CAUSE:
             return JS_NewString(ctx, switch_channel_cause2str(switch_channel_get_cause(channel)) );
 
-        case SESSION_PROP_CAUSECODE:
+        case PROP_CAUSECODE:
             return JS_NewInt32(ctx, switch_channel_get_cause(channel));
 
-        case SESSION_PROP_CALLER_ID_NAME:
+        case PROP_CALLER_ID_NAME:
             if(!caller_profile) { return JS_UNDEFINED; }
             return JS_NewString(ctx, caller_profile->caller_id_name);
 
-        case SESSION_PROP_CALLER_ID_NUMBER:
+        case PROP_CALLER_ID_NUMBER:
             if(!caller_profile) { return JS_UNDEFINED; }
             return JS_NewString(ctx, caller_profile->caller_id_number);
 
-        case SESSION_PROP_PROFILE_DIALPLAN:
+        case PROP_PROFILE_DIALPLAN:
             if(!caller_profile) { return JS_UNDEFINED; }
             return JS_NewString(ctx, caller_profile->dialplan);
 
-        case SESSION_PROP_PROFILE_DESTINATION:
+        case PROP_PROFILE_DESTINATION:
             if(!caller_profile) { return JS_UNDEFINED; }
             return JS_NewString(ctx, caller_profile->destination_number);
     }
@@ -109,20 +113,7 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
 static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
-    return JS_ThrowTypeError(ctx, "Read only property!");
-}
-
-static JSValue js_session_originate(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-
-
-
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
-}
-
-static JSValue js_session_set_caller_data(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    return JS_FALSE;
 }
 
 static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -133,7 +124,7 @@ static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val,
     channel = switch_core_session_get_channel(jss->session);
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Callback function not defiend");
+        return JS_ThrowTypeError(ctx, "Invalid argument: callback function");
     }
 
     if(JS_IsUndefined(argv[0])) {
@@ -187,7 +178,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
     if(zstr(js_tts_name)) {
         ch_tts_name = switch_channel_get_variable(channel, "tts_engine");
         if(zstr(ch_tts_name)) {
-            return JS_ThrowTypeError(ctx, "Invalid parameter: TTS Name");
+            return JS_ThrowTypeError(ctx, "Invalid argument: TTS Name");
         }
     }
 
@@ -196,7 +187,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
          ch_tts_voice = switch_channel_get_variable(channel, "tts_voice");
             if(zstr(ch_tts_name)) {
                 JS_FreeCString(ctx, js_tts_voice);
-                return JS_ThrowTypeError(ctx, "Invalid parameter: TTS Voice");
+                return JS_ThrowTypeError(ctx, "Invalid argument: TTS Voice");
             }
     }
 
@@ -204,7 +195,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
     if(zstr(tts_text)) {
         JS_FreeCString(ctx, js_tts_name);
         JS_FreeCString(ctx, js_tts_voice);
-        return JS_ThrowTypeError(ctx, "Invalid parameter: TTS Text");
+        return JS_ThrowTypeError(ctx, "Invalid argument: TTS Text");
     }
 
     if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
@@ -420,7 +411,7 @@ static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, i
 
     if(argc > 0) {
         if(!JS_IsFunction(ctx, argv[0])) {
-            return JS_ThrowTypeError(ctx, "Callback function not defiend");
+            return JS_ThrowTypeError(ctx, "Invalid argument: callback function");
         }
         memset(&cb_state, 0, sizeof(cb_state));
         cb_state.jss_obj = this_val;
@@ -448,7 +439,7 @@ static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, i
     return JS_TRUE;
 }
 
-static JSValue  js_session_flush_events(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_flush_events(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_event_t *event;
 
@@ -460,7 +451,7 @@ static JSValue  js_session_flush_events(JSContext *ctx, JSValueConst this_val, i
     return JS_TRUE;
 }
 
-static JSValue  js_session_flush_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_session_flush_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
 
@@ -931,10 +922,19 @@ static switch_status_t js_collect_input_callback(switch_core_session_t *session,
     js_session_t *jss = cb_state->jss;
     JSContext *ctx = (jss ? jss->ctx : NULL);
     JSValue args[4] = { 0 };
+    JSValue jss_obj;
     JSValue ret_val;
 
+    if(cb_state->jss_a && cb_state->jss_a->session && cb_state->jss_a->session == session) {
+        jss_obj = cb_state->jss_a_obj;
+    } else if(cb_state->jss_b && cb_state->jss_b->session && cb_state->jss_b->session == session) {
+        jss_obj = cb_state->jss_b_obj;
+    } else {
+        jss_obj = cb_state->jss_obj;
+    }
+
     if(itype == SWITCH_INPUT_TYPE_DTMF) {
-        args[0] = cb_state->jss_obj;
+        args[0] = jss_obj;
         args[1] = js_dtmf_object_create(ctx, (switch_dtmf_t *) input);
         args[2] = JS_NewString(ctx, "dtmf");
         args[3] = cb_state->arg;
@@ -954,49 +954,49 @@ static switch_status_t js_collect_input_callback(switch_core_session_t *session,
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSClassDef js_session_class = {
-    SESSION_CLASS_NAME,
+    CLASS_NAME,
     .finalizer = js_session_finalizer,
 };
 
 static const JSCFunctionListEntry js_session_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("name", js_session_property_get, js_session_property_set, SESSION_PROP_NAME),
-    JS_CGETSET_MAGIC_DEF("uuid", js_session_property_get, js_session_property_set, SESSION_PROP_UUID),
-    JS_CGETSET_MAGIC_DEF("state", js_session_property_get, js_session_property_set, SESSION_PROP_STATE),
-    JS_CGETSET_MAGIC_DEF("cause", js_session_property_get, js_session_property_set, SESSION_PROP_CAUSE),
-    JS_CGETSET_MAGIC_DEF("causecode", js_session_property_get, js_session_property_set, SESSION_PROP_CAUSECODE),
-    JS_CGETSET_MAGIC_DEF("dialplan", js_session_property_get, js_session_property_set, SESSION_PROP_PROFILE_DIALPLAN),
-    JS_CGETSET_MAGIC_DEF("destination", js_session_property_get, js_session_property_set, SESSION_PROP_PROFILE_DESTINATION),
-    JS_CGETSET_MAGIC_DEF("caller_id_name", js_session_property_get, js_session_property_set, SESSION_PROP_CALLER_ID_NAME),
-    JS_CGETSET_MAGIC_DEF("caller_id_number", js_session_property_get, js_session_property_set, SESSION_PROP_CALLER_ID_NUMBER),
+    JS_CGETSET_MAGIC_DEF("name", js_session_property_get, js_session_property_set, PROP_NAME),
+    JS_CGETSET_MAGIC_DEF("uuid", js_session_property_get, js_session_property_set, PROP_UUID),
+    JS_CGETSET_MAGIC_DEF("state", js_session_property_get, js_session_property_set, PROP_STATE),
+    JS_CGETSET_MAGIC_DEF("cause", js_session_property_get, js_session_property_set, PROP_CAUSE),
+    JS_CGETSET_MAGIC_DEF("causecode", js_session_property_get, js_session_property_set, PROP_CAUSECODE),
+    JS_CGETSET_MAGIC_DEF("dialplan", js_session_property_get, js_session_property_set, PROP_PROFILE_DIALPLAN),
+    JS_CGETSET_MAGIC_DEF("destination", js_session_property_get, js_session_property_set, PROP_PROFILE_DESTINATION),
+    JS_CGETSET_MAGIC_DEF("caller_id_name", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NAME),
+    JS_CGETSET_MAGIC_DEF("caller_id_number", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NUMBER),
     //
-    JS_CFUNC_DEF("originate", 2, js_session_originate),
-    JS_CFUNC_DEF("setCallerData", 2, js_session_set_caller_data),
-    JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),       // ok
-    JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),       // ok
-    JS_CFUNC_DEF("speak", 1, js_session_speak),                         // ok
-    JS_CFUNC_DEF("sayPhrase", 1, js_session_say_phrase),                // ok
-    JS_CFUNC_DEF("streamFile", 1, js_session_stream_file),              // ok
-    JS_CFUNC_DEF("recordFile", 1, js_session_record_file),              // ok
-    JS_CFUNC_DEF("collectInput", 1, js_session_collect_input),          // ok
-    JS_CFUNC_DEF("flushEvents", 1, js_session_flush_events),            // ok
-    JS_CFUNC_DEF("flushDigits", 1, js_session_flush_digits),            // ok
-    JS_CFUNC_DEF("setVariable", 2, js_session_set_var),                 // ok
-    JS_CFUNC_DEF("getVariable", 1, js_session_get_var),                 // ok
-    JS_CFUNC_DEF("getDigits", 4, js_session_get_digits),                // ok
-    JS_CFUNC_DEF("answer", 0, js_session_answer),                       // ok
-    JS_CFUNC_DEF("preAnswer", 0, js_session_pre_answer),                // ok
-    JS_CFUNC_DEF("generateXmlCdr", 0, js_session_generate_xml_cdr),     // ok
-    JS_CFUNC_DEF("ready", 0, js_session_is_ready),                      // ok
-    JS_CFUNC_DEF("answered", 0, js_session_is_answered),                // ok
-    JS_CFUNC_DEF("mediaReady", 0, js_session_is_media_ready),           // ok
-    JS_CFUNC_DEF("waitForAnswer", 0, js_session_wait_for_answer),       // ok
-    JS_CFUNC_DEF("waitForMedia", 0, js_session_wait_for_media),         // ok
-    JS_CFUNC_DEF("getEvent", 0, js_session_get_event),                  // ok
-    JS_CFUNC_DEF("sendEvent", 0, js_session_send_event),                // ok
-    JS_CFUNC_DEF("hangup", 0, js_session_hangup),                       // ok
-    JS_CFUNC_DEF("execute", 0, js_session_execute),                     // ok
-    JS_CFUNC_DEF("sleep", 1, js_session_sleep),                         // ok
-    JS_CFUNC_DEF("destroy", 0, js_session_destroy),                     // ok
+    //JS_CFUNC_DEF("originate", 2, js_session_originate),                 // deprecated (use new Session(\"<dial string>\", a_leg))
+    //JS_CFUNC_DEF("setCallerData", 2, js_session_set_caller_data),       // deprecated
+    JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),
+    JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),
+    JS_CFUNC_DEF("speak", 1, js_session_speak),
+    JS_CFUNC_DEF("sayPhrase", 1, js_session_say_phrase),
+    JS_CFUNC_DEF("streamFile", 1, js_session_stream_file),
+    JS_CFUNC_DEF("recordFile", 1, js_session_record_file),
+    JS_CFUNC_DEF("collectInput", 1, js_session_collect_input),
+    JS_CFUNC_DEF("flushEvents", 1, js_session_flush_events),
+    JS_CFUNC_DEF("flushDigits", 1, js_session_flush_digits),
+    JS_CFUNC_DEF("setVariable", 2, js_session_set_var),
+    JS_CFUNC_DEF("getVariable", 1, js_session_get_var),
+    JS_CFUNC_DEF("getDigits", 4, js_session_get_digits),
+    JS_CFUNC_DEF("answer", 0, js_session_answer),
+    JS_CFUNC_DEF("preAnswer", 0, js_session_pre_answer),
+    JS_CFUNC_DEF("generateXmlCdr", 0, js_session_generate_xml_cdr),
+    JS_CFUNC_DEF("ready", 0, js_session_is_ready),
+    JS_CFUNC_DEF("answered", 0, js_session_is_answered),
+    JS_CFUNC_DEF("mediaReady", 0, js_session_is_media_ready),
+    JS_CFUNC_DEF("waitForAnswer", 0, js_session_wait_for_answer),
+    JS_CFUNC_DEF("waitForMedia", 0, js_session_wait_for_media),
+    JS_CFUNC_DEF("getEvent", 0, js_session_get_event),
+    JS_CFUNC_DEF("sendEvent", 0, js_session_send_event),
+    JS_CFUNC_DEF("hangup", 0, js_session_hangup),
+    JS_CFUNC_DEF("execute", 0, js_session_execute),
+    JS_CFUNC_DEF("sleep", 1, js_session_sleep),
+    JS_CFUNC_DEF("destroy", 0, js_session_destroy),
 };
 
 static void js_session_finalizer(JSRuntime *rt, JSValue val) {
@@ -1094,17 +1094,17 @@ void js_session_class_register_rt(JSRuntime *rt) {
 }
 
 switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj) {
-    JSValue session_proto;
-    JSValue session_class;
+    JSValue obj_proto;
+    JSValue obj_class;
 
-    session_proto = JS_NewObject(ctx);
-    JS_SetPropertyFunctionList(ctx, session_proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));
+    obj_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, obj_proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));
 
-    session_class = JS_NewCFunction2(ctx, js_session_contructor, SESSION_CLASS_NAME, 2, JS_CFUNC_constructor, 0);
-    JS_SetConstructor(ctx, session_class, session_proto);
-    JS_SetClassProto(ctx, js_session_class_id, session_proto);
+    obj_class = JS_NewCFunction2(ctx, js_session_contructor, CLASS_NAME, 2, JS_CFUNC_constructor, 0);
+    JS_SetConstructor(ctx, obj_class, obj_proto);
+    JS_SetClassProto(ctx, js_session_class_id, obj_proto);
 
-    JS_SetPropertyStr(ctx, global_obj, SESSION_CLASS_NAME, session_class);
+    JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
     return SWITCH_STATUS_SUCCESS;
 }
 
@@ -1134,4 +1134,47 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-session-obj-created: jss=%p, session=%p\n", jss, jss->session);
 
     return obj;
+}
+
+JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss_a = NULL;
+    js_session_t *jss_b = NULL;
+    input_callback_state_t cb_state = { 0 };
+    switch_input_args_t args = { 0 };
+    switch_input_callback_function_t dtmf_func = NULL;
+    int len = 0;
+    void *bp = NULL;
+
+    if(argc < 2) {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    jss_a = JS_GetOpaque(argv[0], js_seesion_class_get_id());
+    if(!(jss_a && jss_a->session)) {
+        return JS_ThrowTypeError(ctx, "Session A is not ready");
+    }
+
+    jss_b = JS_GetOpaque(argv[1], js_seesion_class_get_id());
+    if(!(jss_b && jss_b->session)) {
+        return JS_ThrowTypeError(ctx, "Session B is not ready");
+    }
+
+    if(argc > 2 && JS_IsFunction(ctx, argv[2])) {
+        memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss = jss_a;
+        cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
+        cb_state.function = argv[1];
+
+        cb_state.jss_a_obj = argv[0];
+        cb_state.jss_b_obj = argv[1];
+        cb_state.jss_a = jss_a;
+        cb_state.jss_b = jss_b;
+
+        dtmf_func = js_collect_input_callback;
+        bp = &cb_state;
+        len = sizeof(cb_state);
+    }
+
+    switch_ivr_multi_threaded_bridge(jss_a->session, jss_b->session, dtmf_func, bp, bp);
+    return JS_FALSE;
 }

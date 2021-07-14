@@ -60,6 +60,7 @@ JSClassID js_seesion_class_get_id();
 void js_session_class_register_rt(JSRuntime *rt);
 switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj);
 JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session);
+JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
 // dtmf
 typedef struct {
@@ -81,7 +82,7 @@ void js_event_class_register_rt(JSRuntime *rt);
 switch_status_t js_event_class_register_ctx(JSContext *ctx, JSValue global_obj);
 JSValue js_event_object_create(JSContext *ctx, switch_event_t *event);
 
-// freeswitch file
+// file handle
 typedef struct {
     uint8_t                 fl_closed;
     uint8_t                 fl_auto_close;
@@ -93,5 +94,20 @@ JSClassID js_file_handle_class_get_id();
 void js_file_handle_class_register_rt(JSRuntime *rt);
 switch_status_t js_file_handle_class_register_ctx(JSContext *ctx, JSValue global_obj);
 JSValue js_file_handle_object_create(JSContext *ctx, switch_file_handle_t *fh, switch_core_session_t *session);
+
+// file i/o
+typedef struct {
+    uint32_t                flags;
+    int32_t                 bufsize;
+    switch_size_t           buflen;
+    char                    *path;
+    char                    *buf;
+    switch_file_t           *fd;
+    switch_memory_pool_t    *pool;
+} js_fileio_t;
+
+JSClassID js_fileio_class_get_id();
+void js_fileio_class_register_rt(JSRuntime *rt);
+switch_status_t js_fileio_class_register_ctx(JSContext *ctx, JSValue global_obj);
 
 #endif

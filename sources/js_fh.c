@@ -1,29 +1,32 @@
 /**
- * Freeswitch file
+ * Freeswitch file handle
  *
  * Copyright (C) AlexandrinKS
  * https://akscf.me/
  **/
 #include "mod_quickjs.h"
 
-#define FILE_HANDLE_CLASS_NAME      "FileHandle"
-#define FH_PROP_SPEED               0
-#define FH_PROP_VOLUME              1
+#define FH_CLASS_NAME      "FileHandle"
+#define FH_PROP_SPEED       0
+#define FH_PROP_VOLUME      1
+#define FH_PROP_CHANNELS    2
+#define FH_PROP_SAMPLERATE  3
 
-#define FH_SANITY_CHECK() if (!js_fh || !js_fh->fh) { \
+#define FH_SANITY_CHECK() do { \
+        if(!js_fh || !js_fh->fh || js_fh->fl_closed) { \
            return JS_ThrowTypeError(ctx, "Handle is not initialized"); \
-        }
+        } \
+        if(js_fh->fl_closed) { \
+           return JS_ThrowTypeError(ctx, "Handle is closed"); \
+        } \
+    } while(0)
 
 #define FH_SESSION_CHECK() if (!js_fh->session) { \
-           return JS_ThrowTypeError(ctx, "Session no active"); \
-        }
-
-#define FH_CLOSE_CHECK() if (js_fh->fl_closed) { \
-           return JS_ThrowTypeError(ctx, "File alrady closed"); \
+           return JS_ThrowTypeError(ctx, "Session is not initialized"); \
         }
 
 static JSClassID js_fh_class_id;
-static void js_file_handle_finalizer(JSRuntime *rt, JSValue val);
+static void js_fh_finalizer(JSRuntime *rt, JSValue val);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_fh_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
@@ -40,6 +43,12 @@ static JSValue js_fh_property_get(JSContext *ctx, JSValueConst this_val, int mag
         case FH_PROP_VOLUME: {
             return JS_NewInt32(ctx, js_fh->fh->vol);
         }
+        case FH_PROP_CHANNELS: {
+            return JS_NewInt32(ctx, js_fh->fh->channels);
+        }
+        case FH_PROP_SAMPLERATE: {
+            return JS_NewInt32(ctx, js_fh->fh->samplerate);
+        }
     }
 
     return JS_UNDEFINED;
@@ -55,6 +64,11 @@ static JSValue js_fh_property_set(JSContext *ctx, JSValueConst this_val, JSValue
     }
 
     switch(magic) {
+        case FH_PROP_CHANNELS:
+        case FH_PROP_SAMPLERATE:
+            return JS_FALSE;
+        break;
+
         case FH_PROP_SPEED: {
             if(JS_IsNumber(val)) {
                 JS_ToUint32(ctx, &ival, val);
@@ -106,7 +120,6 @@ static JSValue js_fh_pause(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
 
     FH_SANITY_CHECK();
-    FH_CLOSE_CHECK();
 
     if(argc > 0) {
         if(JS_ToBool(ctx, argv[0])) {
@@ -129,7 +142,6 @@ static JSValue js_fh_truncate(JSContext *ctx, JSValueConst this_val, int argc, J
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
 
     FH_SANITY_CHECK();
-    FH_CLOSE_CHECK();
 
     switch_core_file_truncate(js_fh->fh, 0);
 
@@ -141,7 +153,6 @@ static JSValue js_fh_restart(JSContext *ctx, JSValueConst this_val, int argc, JS
     uint32_t pos = 0;
 
     FH_SANITY_CHECK();
-    FH_CLOSE_CHECK();
 
     js_fh->fh->speed = 0;
     switch_core_file_seek(js_fh->fh, &pos, 0, SEEK_SET);
@@ -159,7 +170,6 @@ static JSValue js_fh_seek(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 
     FH_SANITY_CHECK();
     FH_SESSION_CHECK();
-    FH_CLOSE_CHECK();
 
     codec = switch_core_session_get_read_codec(js_fh->session);
 
@@ -192,7 +202,6 @@ static JSValue js_fh_read(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
 
     FH_SANITY_CHECK();
-    FH_CLOSE_CHECK();
 
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
@@ -201,11 +210,6 @@ static JSValue js_fh_write(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
 
     FH_SANITY_CHECK();
-    FH_CLOSE_CHECK();
-
-    //
-    // todo
-    //
 
     return JS_ThrowTypeError(ctx, "Not yet implemented");
 }
@@ -214,23 +218,26 @@ static JSValue js_fh_close(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
 
     FH_SANITY_CHECK();
-    FH_CLOSE_CHECK();
 
-    switch_core_file_close(js_fh->fh);
+    if(js_fh->fh) {
+        switch_core_file_close(js_fh->fh);
+    }
     js_fh->fl_closed = SWITCH_TRUE;
 
     return JS_TRUE;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-static JSClassDef js_file_handle_class = {
-    FILE_HANDLE_CLASS_NAME,
-    .finalizer = js_file_handle_finalizer,
+static JSClassDef js_fh_class = {
+    FH_CLASS_NAME,
+    .finalizer = js_fh_finalizer,
 };
 
-static const JSCFunctionListEntry js_file_handle_proto_funcs[] = {
+static const JSCFunctionListEntry js_fh_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("speed", js_fh_property_get, js_fh_property_set, FH_PROP_SPEED),
     JS_CGETSET_MAGIC_DEF("volume", js_fh_property_get, js_fh_property_set, FH_PROP_VOLUME),
+    JS_CGETSET_MAGIC_DEF("channels", js_fh_property_get, js_fh_property_set, FH_PROP_CHANNELS),
+    JS_CGETSET_MAGIC_DEF("samplerate", js_fh_property_get, js_fh_property_set, FH_PROP_SAMPLERATE),
     //
     JS_CFUNC_DEF("pause", 1, js_fh_pause),
     JS_CFUNC_DEF("truncate", 1, js_fh_truncate),
@@ -241,14 +248,14 @@ static const JSCFunctionListEntry js_file_handle_proto_funcs[] = {
     JS_CFUNC_DEF("close", 1, js_fh_close),
 };
 
-static void js_file_handle_finalizer(JSRuntime *rt, JSValue val) {
+static void js_fh_finalizer(JSRuntime *rt, JSValue val) {
     js_file_handle_t *js_fh = JS_GetOpaque(val, js_fh_class_id);
 
     if(!js_fh) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-finalizer: js_file_handle=%p, fh=%p\n", js_fh, js_fh->fh);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-finalizer: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
 
     if(js_fh->fh && js_fh->fl_auto_close && !js_fh->fl_closed) {
         switch_core_file_close(js_fh->fh);
@@ -257,29 +264,86 @@ static void js_file_handle_finalizer(JSRuntime *rt, JSValue val) {
     js_free_rt(rt, js_fh);
 }
 
-static JSValue js_file_handle_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
+static JSValue js_fh_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
     JSValue obj = JS_UNDEFINED;
+    JSValue err = JS_UNDEFINED;
     JSValue proto;
     js_file_handle_t *js_fh = NULL;
     switch_file_handle_t *fh = NULL;
-    const char *fname = NULL;
+    switch_channel_t *channel = NULL;
+    switch_codec_t *codec = NULL;
+    js_session_t *jss = NULL;
+    uint32_t flags = 0x0;
+    const char *path = NULL;
+    char *dpath = NULL;
+
+    if(argc > 0) {
+        path = JS_ToCString(ctx, argv[0]);
+        if(zstr(path)) {
+            return JS_ThrowTypeError(ctx, "Invalid argument: filename");
+        }
+        if(argc > 1) {
+            jss = JS_GetOpaque(argv[1], js_seesion_class_get_id());
+            if(!jss || !jss->session) {
+                err = JS_ThrowTypeError(ctx, "Session is not ready");
+                goto fail;
+            }
+            channel = switch_core_session_get_channel(jss->session);
+            if(!switch_channel_ready(channel)) {
+                err = JS_ThrowTypeError(ctx, "Channel is not ready");
+                goto fail;
+            }
+            codec = switch_core_session_get_read_codec(js_fh->session);
+        }
+
+        if(switch_file_exists(path, NULL) != SWITCH_STATUS_SUCCESS) {
+            const char *snd_prefix = switch_core_get_variable("sound_prefix");
+            dpath = switch_mprintf("%s%s%s", snd_prefix, SWITCH_PATH_SEPARATOR, path);
+            if(switch_file_exists(dpath, NULL) != SWITCH_STATUS_SUCCESS) {
+                err = JS_ThrowTypeError(ctx, "File not found: %s", dpath);
+                goto fail;
+            }
+        }
+        if(argc > 2) {
+            const char *flstr = JS_ToCString(ctx, argv[2]);
+            if(!zstr(flstr)) {
+                if(strstr(flstr, "read")) {
+                    flags |= SWITCH_FILE_FLAG_READ;
+                }
+                if(strstr(flstr, "write")) {
+                    flags |= SWITCH_FILE_FLAG_WRITE;
+                }
+                if(strstr(flstr, "short")) {
+                    flags |= SWITCH_FILE_DATA_SHORT;
+                }
+                if(strstr(flstr, "int")) {
+                    flags |= SWITCH_FILE_DATA_INT;
+                }
+                if(strstr(flstr, "float")) {
+                    flags |= SWITCH_FILE_DATA_FLOAT;
+                }
+                if(strstr(flstr, "double")) {
+                    flags |= SWITCH_FILE_DATA_DOUBLE;
+                }
+                if(strstr(flstr, "raw")) {
+                    flags |= SWITCH_FILE_DATA_RAW;
+                }
+            }
+            JS_FreeCString(ctx, flstr);
+        }
+    }
+    if(jss && codec && (dpath || path)) {
+        if(switch_core_file_open(fh, (dpath ? dpath : path), codec->implementation->number_of_channels, codec->implementation->samples_per_second, flags, NULL) != SWITCH_STATUS_SUCCESS) {
+            err = JS_ThrowTypeError(ctx, "Couldn't open file: %s", (dpath ? dpath : path));
+            goto fail;
+        }
+    }
 
     js_fh = js_mallocz(ctx, sizeof(js_file_handle_t));
     if(!js_fh) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
         return JS_EXCEPTION;
     }
-
-    if(argc > 0) {
-        fname = JS_ToCString(ctx, argv[0]);
-    }
-    if(zstr(fname)) {
-        JS_ThrowTypeError(ctx, "Missing filename");
-    }
-    //
-    // todo
-    //
-    JS_FreeCString(ctx, fname);
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
@@ -289,19 +353,25 @@ static JSValue js_file_handle_contructor(JSContext *ctx, JSValueConst new_target
     if(JS_IsException(obj)) { goto fail; }
 
     js_fh->fh = fh;
+    js_fh->session = (jss ? jss->session : NULL);
     js_fh->fl_auto_close = SWITCH_TRUE;
     JS_SetOpaque(obj, js_fh);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-constructor: js-filehandle=%p, fh=%p\n", js_fh, js_fh->fh);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-constructor: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
 
+    switch_safe_free(dpath);
+    JS_FreeCString(ctx, path);
     return obj;
+
 fail:
+    switch_safe_free(dpath);
+    JS_FreeCString(ctx, path);
     if(fh) {
         switch_core_file_close(js_fh->fh);
     }
     js_free(ctx, js_fh);
     JS_FreeValue(ctx, obj);
-    return JS_EXCEPTION;
+    return (JS_IsUndefined(err) ? JS_EXCEPTION : err);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -313,21 +383,21 @@ JSClassID js_file_handle_class_get_id() {
 
 void js_file_handle_class_register_rt(JSRuntime *rt) {
     JS_NewClassID(&js_fh_class_id);
-    JS_NewClass(rt, js_fh_class_id, &js_file_handle_class);
+    JS_NewClass(rt, js_fh_class_id, &js_fh_class);
 }
 
 switch_status_t js_file_handle_class_register_ctx(JSContext *ctx, JSValue global_obj) {
-    JSValue fh_proto;
-    JSValue fh_class;
+    JSValue obj_proto;
+    JSValue obj_class;
 
-    fh_proto = JS_NewObject(ctx);
-    JS_SetPropertyFunctionList(ctx, fh_proto, js_file_handle_proto_funcs, ARRAY_SIZE(js_file_handle_proto_funcs));
+    obj_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, obj_proto, js_fh_proto_funcs, ARRAY_SIZE(js_fh_proto_funcs));
 
-    fh_class = JS_NewCFunction2(ctx, js_file_handle_contructor, FILE_HANDLE_CLASS_NAME, 1, JS_CFUNC_constructor, 0);
-    JS_SetConstructor(ctx, fh_class, fh_proto);
-    JS_SetClassProto(ctx, js_fh_class_id, fh_proto);
+    obj_class = JS_NewCFunction2(ctx, js_fh_contructor, FH_CLASS_NAME, 1, JS_CFUNC_constructor, 0);
+    JS_SetConstructor(ctx, obj_class, obj_proto);
+    JS_SetClassProto(ctx, js_fh_class_id, obj_proto);
 
-    JS_SetPropertyStr(ctx, global_obj, FILE_HANDLE_CLASS_NAME, fh_class);
+    JS_SetPropertyStr(ctx, global_obj, FH_CLASS_NAME, obj_class);
 
     return SWITCH_STATUS_SUCCESS;
 }
@@ -344,7 +414,7 @@ JSValue js_file_handle_object_create(JSContext *ctx, switch_file_handle_t *fh, s
 
     proto = JS_NewObject(ctx);
     if(JS_IsException(proto)) { return proto; }
-    JS_SetPropertyFunctionList(ctx, proto, js_file_handle_proto_funcs, ARRAY_SIZE(js_file_handle_proto_funcs));
+    JS_SetPropertyFunctionList(ctx, proto, js_fh_proto_funcs, ARRAY_SIZE(js_fh_proto_funcs));
 
     obj = JS_NewObjectProtoClass(ctx, proto, js_fh_class_id);
     JS_FreeValue(ctx, proto);
@@ -355,7 +425,7 @@ JSValue js_file_handle_object_create(JSContext *ctx, switch_file_handle_t *fh, s
     js_fh->session = session;
     JS_SetOpaque(obj, js_fh);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-obj-created: js_file_handle=%p, fh=%p\n", js_fh, js_fh->fh);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-obj-created: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
 
     return obj;
 }

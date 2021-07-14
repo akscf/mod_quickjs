@@ -149,7 +149,7 @@ LTLIBRARIES = $(mod_LTLIBRARIES)
 mod_quickjs_la_DEPENDENCIES = $(switch_builddir)/libfreeswitch.la \
 	/opt/quickjs/lib/quickjs/libquickjs.lto.a
 am_mod_quickjs_la_OBJECTS = mod_quickjs_la-mod_quickjs.lo \
-	mod_quickjs_la-js_session.lo mod_quickjs_la-js_dtmf.lo mod_quickjs_la-js_event.lo mod_quickjs_la-js_fh.lo
+	mod_quickjs_la-js_session.lo mod_quickjs_la-js_dtmf.lo mod_quickjs_la-js_event.lo mod_quickjs_la-js_fh.lo mod_quickjs_la-js_fileio.lo
 mod_quickjs_la_OBJECTS = $(am_mod_quickjs_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -582,7 +582,7 @@ DEFAULT_ARGS = --build=$(build) --host=$(host) --target=$(target) --prefix="$(pr
 moddir = @modulesdir@
 MODNAME = mod_quickjs
 mod_LTLIBRARIES = mod_quickjs.la
-mod_quickjs_la_SOURCES = mod_quickjs.c js_session.c js_dtmf.c js_event.c js_fh.c
+mod_quickjs_la_SOURCES = mod_quickjs.c js_session.c js_dtmf.c js_event.c js_fh.c js_fileio.c
 mod_quickjs_la_CFLAGS = $(AM_CFLAGS) -I/opt/quickjs/include/quickjs -I. -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-label -Wno-declaration-after-statement -Wno-pedantic
 mod_quickjs_la_LIBADD = $(switch_builddir)/libfreeswitch.la /opt/quickjs/lib/quickjs/libquickjs.lto.a
 mod_quickjs_la_LDFLAGS = -avoid-version -module -no-undefined -shared
@@ -669,6 +669,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-js_dtmf.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-js_event.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-js_fh.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-js_fileio.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-mod_quickjs.Plo@am__quote@
 
 .c.o:
@@ -729,6 +730,13 @@ mod_quickjs_la-js_fh.lo: js_fh.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='js_fh.c' object='mod_quickjs_la-js_fh.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -c -o mod_quickjs_la-js_fh.lo `test -f 'js_fh.c' || echo '$(srcdir)/'`js_fh.c
+
+mod_quickjs_la-js_fileio.lo: js_fileio.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -MT mod_quickjs_la-js_fileio.lo -MD -MP -MF $(DEPDIR)/mod_quickjs_la-js_fileio.Tpo -c -o mod_quickjs_la-js_fileio.lo `test -f 'js_fileio.c' || echo '$(srcdir)/'`js_fileio.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/mod_quickjs_la-js_fileio.Tpo $(DEPDIR)/mod_quickjs_la-js_fileio.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='js_fileio.c' object='mod_quickjs_la-js_fileio.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -c -o mod_quickjs_la-js_fileio.lo `test -f 'js_fileio.c' || echo '$(srcdir)/'`js_fileio.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

@@ -6,9 +6,9 @@
  **/
 #include "mod_quickjs.h"
 
-#define DTMF_CLASS_NAME                 "DTMF"
-#define DTMF_PROP_DIGIT                 0
-#define DTMF_PROP_DURATION              1
+#define CLASS_NAME                 "DTMF"
+#define PROP_DIGITE                0
+#define PROP_DURATION              1
 
 static JSClassID js_dtmf_class_id;
 
@@ -24,11 +24,11 @@ static JSValue js_dtmf_property_get(JSContext *ctx, JSValueConst this_val, int m
     }
 
     switch(magic) {
-        case DTMF_PROP_DIGIT: {
+        case PROP_DIGITE: {
             char tmp[2] = { js_dtmf->dtmf->digit, '\0' };
             return JS_NewString(ctx, (char *) tmp);
         }
-        case DTMF_PROP_DURATION: {
+        case PROP_DURATION: {
             return JS_NewInt32(ctx, js_dtmf->dtmf->duration);
         }
     }
@@ -39,18 +39,18 @@ static JSValue js_dtmf_property_get(JSContext *ctx, JSValueConst this_val, int m
 static JSValue js_dtmf_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
     js_dtmf_t *js_dtmf = JS_GetOpaque2(ctx, this_val, js_dtmf_class_id);
 
-    return JS_ThrowTypeError(ctx, "Read only property!");
+    return JS_FALSE;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSClassDef js_dtmf_class = {
-    DTMF_CLASS_NAME,
+    CLASS_NAME,
     .finalizer = js_dtmf_finalizer,
 };
 
 static const JSCFunctionListEntry js_dtmf_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("digit", js_dtmf_property_get, js_dtmf_property_set, DTMF_PROP_DIGIT),
-    JS_CGETSET_MAGIC_DEF("duration", js_dtmf_property_get, js_dtmf_property_set, DTMF_PROP_DURATION),
+    JS_CGETSET_MAGIC_DEF("digit", js_dtmf_property_get, js_dtmf_property_set, PROP_DIGITE),
+    JS_CGETSET_MAGIC_DEF("duration", js_dtmf_property_get, js_dtmf_property_set, PROP_DURATION),
 };
 
 static void js_dtmf_finalizer(JSRuntime *rt, JSValue val) {
@@ -119,17 +119,17 @@ void js_dtmf_class_register_rt(JSRuntime *rt) {
 }
 
 switch_status_t js_dtmf_class_register_ctx(JSContext *ctx, JSValue global_obj) {
-    JSValue dtmf_proto;
-    JSValue dtmf_class;
+    JSValue obj_proto;
+    JSValue obj_class;
 
-    dtmf_proto = JS_NewObject(ctx);
-    JS_SetPropertyFunctionList(ctx, dtmf_proto, js_dtmf_proto_funcs, ARRAY_SIZE(js_dtmf_proto_funcs));
+    obj_proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, obj_proto, js_dtmf_proto_funcs, ARRAY_SIZE(js_dtmf_proto_funcs));
 
-    dtmf_class = JS_NewCFunction2(ctx, js_dtmf_contructor, DTMF_CLASS_NAME, 2, JS_CFUNC_constructor, 0);
-    JS_SetConstructor(ctx, dtmf_class, dtmf_proto);
-    JS_SetClassProto(ctx, js_dtmf_class_id, dtmf_proto);
+    obj_class = JS_NewCFunction2(ctx, js_dtmf_contructor, CLASS_NAME, 2, JS_CFUNC_constructor, 0);
+    JS_SetConstructor(ctx, obj_class, obj_proto);
+    JS_SetClassProto(ctx, js_dtmf_class_id, obj_proto);
 
-    JS_SetPropertyStr(ctx, global_obj, DTMF_CLASS_NAME, dtmf_class);
+    JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
     return SWITCH_STATUS_SUCCESS;
 }
 
