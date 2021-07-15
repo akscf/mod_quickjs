@@ -46,8 +46,8 @@ typedef struct {
 
 void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx);
 
-// --------------------------------------------------------------------------------------------------------
-// session
+// -----------------------------------------------------------------------------------------------------------------------------------------------
+// Session
 typedef struct {
     uint8_t                 fl_hup_auto;
     uint8_t                 fl_hup_hook;
@@ -62,7 +62,7 @@ switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj
 JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session);
 JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
-// dtmf
+// DTMF
 typedef struct {
     switch_dtmf_t       *dtmf;
 } js_dtmf_t;
@@ -72,7 +72,7 @@ void js_dtmf_class_register_rt(JSRuntime *rt);
 switch_status_t js_dtmf_class_register_ctx(JSContext *ctx, JSValue global_obj);
 JSValue js_dtmf_object_create(JSContext *ctx, switch_dtmf_t *dtmf);
 
-// event
+// Event
 typedef struct {
     switch_event_t      *event;
 } js_event_t;
@@ -82,7 +82,7 @@ void js_event_class_register_rt(JSRuntime *rt);
 switch_status_t js_event_class_register_ctx(JSContext *ctx, JSValue global_obj);
 JSValue js_event_object_create(JSContext *ctx, switch_event_t *event);
 
-// file handle
+// FileHandle
 typedef struct {
     uint8_t                 fl_closed;
     uint8_t                 fl_auto_close;
@@ -95,7 +95,7 @@ void js_file_handle_class_register_rt(JSRuntime *rt);
 switch_status_t js_file_handle_class_register_ctx(JSContext *ctx, JSValue global_obj);
 JSValue js_file_handle_object_create(JSContext *ctx, switch_file_handle_t *fh, switch_core_session_t *session);
 
-// file i/o
+// FileIO
 typedef struct {
     uint32_t                flags;
     int32_t                 bufsize;
@@ -109,5 +109,21 @@ typedef struct {
 JSClassID js_fileio_class_get_id();
 void js_fileio_class_register_rt(JSRuntime *rt);
 switch_status_t js_fileio_class_register_ctx(JSContext *ctx, JSValue global_obj);
+
+// File
+typedef struct {
+    uint8_t                 is_open;
+    uint8_t                 tmp_file;
+    uint32_t                flags;
+    char                    *path;
+    char                    *name;
+    switch_file_t           *fd;
+    switch_dir_t            *dir;
+    switch_memory_pool_t    *pool;
+} js_file_t;
+
+JSClassID js_file_class_get_id();
+void js_file_class_register_rt(JSRuntime *rt);
+switch_status_t js_file_class_register_ctx(JSContext *ctx, JSValue global_obj);
 
 #endif

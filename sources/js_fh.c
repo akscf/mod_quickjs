@@ -200,18 +200,69 @@ static JSValue js_fh_seek(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 
 static JSValue js_fh_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
+    switch_size_t size = 0;
+    switch_size_t len = 0;
+    uint8_t *buf;
 
     FH_SANITY_CHECK();
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    if(argc < 2)  {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    buf = JS_GetArrayBuffer(ctx, &size, argv[0]);
+    if(!buf) {
+        return JS_EXCEPTION;
+    }
+
+    JS_ToInt64(ctx, &len, argv[1]);
+    if(len <= 0) {
+        return JS_NewInt64(ctx, 0);
+    }
+    if(len > size) {
+        return JS_ThrowRangeError(ctx, "Array buffer overflow (len > array size)");
+    }
+
+    if(switch_core_file_read(js_fh->fh, buf, &len) != SWITCH_STATUS_SUCCESS) {
+        if(len == 0) {
+            return JS_NewInt64(ctx, 0);
+        }
+        return JS_EXCEPTION;
+    }
+
+    return JS_NewInt64(ctx, len);
 }
 
 static JSValue js_fh_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
+    switch_size_t size = 0;
+    switch_size_t len = 0;
+    uint8_t *buf;
 
     FH_SANITY_CHECK();
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    if(argc < 2)  {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    JS_ToInt64(ctx, &len, argv[1]);
+    buf = JS_GetArrayBuffer(ctx, &size, argv[0]);
+
+    if(!buf) {
+        return JS_EXCEPTION;
+    }
+    if(len > size) {
+        return JS_ThrowRangeError(ctx, "Array buffer overflow (len > array size)");
+    }
+
+    if(switch_core_file_write(js_fh->fh, buf, &len) != SWITCH_STATUS_SUCCESS) {
+        if(len == 0) {
+            return JS_NewInt64(ctx, 0);
+        }
+        return JS_EXCEPTION;
+    }
+
+    return JS_NewInt64(ctx, len);
 }
 
 static JSValue js_fh_close(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {

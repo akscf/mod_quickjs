@@ -85,7 +85,6 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_UNDEFINED;
 }
 
-// todo:
 static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     JSValue ret_val = JS_FALSE;
     script_instance_t *script_instance = NULL;
@@ -294,113 +293,6 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     return js_session_ext_bridge(ctx, this_val, argc, argv);
 }
 
-static JSValue js_file_exists(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSValue ret_val;
-    const char *path = NULL;
-
-    if(!argc) {
-        return JS_ThrowTypeError(ctx, "Invalid argument");
-    }
-
-    path = JS_ToCString(ctx, argv[0]);
-    if(zstr(path)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument");
-    }
-    ret_val = (switch_file_exists(path, NULL) == SWITCH_STATUS_SUCCESS) ? JS_TRUE : JS_FALSE;
-    JS_FreeCString(ctx, path);
-
-    return ret_val;
-}
-
-static JSValue js_dir_exists(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSValue ret_val;
-    const char *path = NULL;
-
-    if(!argc) {
-        return JS_ThrowTypeError(ctx, "Invalid argument");
-    }
-
-    path = JS_ToCString(ctx, argv[0]);
-    if(zstr(path)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument");
-    }
-    ret_val = (switch_directory_exists(path, NULL) == SWITCH_STATUS_SUCCESS) ? JS_TRUE : JS_FALSE;
-    JS_FreeCString(ctx, path);
-
-    return ret_val;
-}
-
-static JSValue js_file_delete(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSValue ret_val;
-    const char *path = NULL;
-
-    if(!argc) {
-        return JS_ThrowTypeError(ctx, "Invalid argument");
-    }
-    path = JS_ToCString(ctx, argv[0]);
-    if(zstr(path)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument");
-    }
-    ret_val = (switch_file_remove(path, NULL) == SWITCH_STATUS_SUCCESS) ? JS_TRUE : JS_FALSE;
-    JS_FreeCString(ctx, path);
-
-    return ret_val;
-}
-
-static JSValue js_file_copy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSValue ret_val;
-    const char *from = NULL;
-    const char *to = NULL;
-
-    if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
-    }
-
-    from = JS_ToCString(ctx, argv[0]);
-    if(zstr(from)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: from");
-    }
-
-    to = JS_ToCString(ctx, argv[1]);
-    if(zstr(to)) {
-        JS_FreeCString(ctx, from);
-        return JS_ThrowTypeError(ctx, "Invalid argument: to");
-    }
-
-    ret_val = (switch_file_copy(from, to, SWITCH_FPROT_FILE_SOURCE_PERMS, NULL) == SWITCH_STATUS_SUCCESS) ? JS_TRUE : JS_FALSE;
-    JS_FreeCString(ctx, from);
-    JS_FreeCString(ctx, to);
-
-    return ret_val;
-}
-
-static JSValue js_file_rename(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSValue ret_val;
-    const char *from = NULL;
-    const char *to = NULL;
-
-    if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
-    }
-
-    from = JS_ToCString(ctx, argv[0]);
-    if(zstr(from)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: from");
-    }
-
-    to = JS_ToCString(ctx, argv[1]);
-    if(zstr(to)) {
-        JS_FreeCString(ctx, from);
-        return JS_ThrowTypeError(ctx, "Invalid argument: to");
-    }
-
-    ret_val = (switch_file_rename(from, to, NULL) == SWITCH_STATUS_SUCCESS) ? JS_TRUE : JS_FALSE;
-    JS_FreeCString(ctx, from);
-    JS_FreeCString(ctx, to);
-
-    return ret_val;
-}
-
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 static uint32_t name2id(char *name, uint32_t len) {
     return switch_crc32_8bytes((char *)name, len);
@@ -555,6 +447,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     js_event_class_register_ctx(ctx, global_obj);
     js_dtmf_class_register_ctx(ctx, global_obj);
     js_fileio_class_register_ctx(ctx, global_obj);
+    js_file_class_register_ctx(ctx, global_obj);
 
     /* script arguments */
     if(!zstr(script_instance->args)) {
@@ -577,7 +470,6 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
         JS_SetPropertyStr(ctx, global_obj, "argv", JS_NewArray(ctx));
     }
 
-    /* general */
     JS_SetPropertyStr(ctx, global_obj, "console_log", JS_NewCFunction(ctx, js_console_log, "console_log", 0));
     JS_SetPropertyStr(ctx, global_obj, "include", JS_NewCFunction(ctx, js_include, "include", 1));
     JS_SetPropertyStr(ctx, global_obj, "msleep", JS_NewCFunction(ctx, js_msleep, "msleep", 1));
@@ -587,13 +479,6 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
-
-    /* extra */
-    JS_SetPropertyStr(ctx, global_obj, "FileExists", JS_NewCFunction(ctx, js_file_exists, "FileExists", 1));
-    JS_SetPropertyStr(ctx, global_obj, "FileDelete", JS_NewCFunction(ctx, js_file_delete, "FileDelete", 1));
-    JS_SetPropertyStr(ctx, global_obj, "FileRename", JS_NewCFunction(ctx, js_file_copy, "FileRename", 2));
-    JS_SetPropertyStr(ctx, global_obj, "FileCopy", JS_NewCFunction(ctx, js_file_rename, "FileCopy", 2));
-    JS_SetPropertyStr(ctx, global_obj, "DirExists", JS_NewCFunction(ctx, js_dir_exists, "DirExists", 1));
 
     JS_FreeValue(ctx, global_obj);
     return status;
@@ -948,6 +833,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     js_event_class_register_rt(globals.qjs_rt);
     js_dtmf_class_register_rt(globals.qjs_rt);
     js_fileio_class_register_rt(globals.qjs_rt);
+    js_file_class_register_rt(globals.qjs_rt);
 
     /* xml config */
     if((xml = switch_xml_open_cfg(CONFIG_NAME, &cfg, NULL)) == NULL) {

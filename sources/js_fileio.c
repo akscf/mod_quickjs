@@ -1,5 +1,5 @@
 /**
- * Freeswitch file i/o
+ * FileIO
  *
  * Copyright (C) AlexandrinKS
  * https://akscf.me/
@@ -9,7 +9,6 @@
 #define CLASS_NAME               "FileIO"
 #define PROP_PATH                0
 #define PROP_OPEN                1
-#define PROP_SIZE                2
 
 static JSClassID js_fileio_class_id;
 static void js_fileio_finalizer(JSRuntime *rt, JSValue val);
@@ -28,13 +27,6 @@ static JSValue js_fileio_property_get(JSContext *ctx, JSValueConst this_val, int
         }
         case PROP_OPEN: {
             return (js_fileio->fd ? JS_TRUE : JS_FALSE);
-        }
-        case PROP_SIZE: {
-            switch_size_t sz = -1;
-            if(js_fileio->fd) {
-                sz = switch_file_get_size(js_fileio->fd);
-            }
-            return JS_NewInt32(ctx, sz);
         }
     }
 
@@ -122,27 +114,6 @@ static JSValue js_fileio_data(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_UNDEFINED;
 }
 
-static JSValue js_fileio_seek(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_fileio_t *js_fileio = JS_GetOpaque2(ctx, this_val, js_fileio_class_id);
-    int64_t ofs = 0;
-
-    if(!js_fileio || !js_fileio->fd) {
-        return JS_FALSE;
-    }
-
-    if(argc > 0) {
-        uint32_t i = 0;
-        JS_ToUint32(ctx, &i, argv[0]);
-        ofs = i;
-    }
-
-    if(switch_file_seek(js_fileio->fd, SEEK_SET, &ofs) == SWITCH_STATUS_SUCCESS) {
-        return JS_TRUE;
-    }
-
-    return JS_FALSE;
-}
-
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSClassDef js_fileio_class = {
     CLASS_NAME,
@@ -152,9 +123,7 @@ static JSClassDef js_fileio_class = {
 static const JSCFunctionListEntry js_fileio_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("path", js_fileio_property_get, js_fileio_property_set, PROP_PATH),
     JS_CGETSET_MAGIC_DEF("open", js_fileio_property_get, js_fileio_property_set, PROP_OPEN),
-    JS_CGETSET_MAGIC_DEF("size", js_fileio_property_get, js_fileio_property_set, PROP_SIZE),
     //
-    JS_CFUNC_DEF("seek", 1, js_fileio_seek),
     JS_CFUNC_DEF("read", 1, js_fileio_read),
     JS_CFUNC_DEF("write", 1, js_fileio_write),
     JS_CFUNC_DEF("data", 1, js_fileio_data),
@@ -191,7 +160,6 @@ static JSValue js_fileio_contructor(JSContext *ctx, JSValueConst new_target, int
     switch_file_t *fd = NULL;
     uint32_t flags = 0x0;
     const char *path = NULL;
-    const char *flstr = NULL;
 
     if(argc < 1) {
         return JS_ThrowTypeError(ctx, "Invalid arguments");
@@ -201,26 +169,18 @@ static JSValue js_fileio_contructor(JSContext *ctx, JSValueConst new_target, int
     if(zstr(path)) {
         return JS_ThrowTypeError(ctx, "Invalid argument: filename");
     }
+
     if(argc > 1) {
-        flstr = JS_ToCString(ctx, argv[1]);
-        if(strchr(flstr, 'r')) {
-            flags |= SWITCH_FOPEN_READ;
-        }
-        if(strchr(flstr, 'w')) {
-            flags |= SWITCH_FOPEN_WRITE;
-        }
-        if(strchr(flstr, 'c')) {
-            flags |= SWITCH_FOPEN_CREATE;
-        }
-        if(strchr(flstr, 'a')) {
-            flags |= SWITCH_FOPEN_APPEND;
-        }
-        if(strchr(flstr, 't')) {
-            flags |= SWITCH_FOPEN_TRUNCATE;
-        }
-        if(strchr(flstr, 'b')) {
-            flags |= SWITCH_FOPEN_BINARY;
-        }
+        const char *fstr = JS_ToCString(ctx, argv[1]);
+
+        if(strchr(fstr, 'r')) { flags |= SWITCH_FOPEN_READ; }
+        if(strchr(fstr, 'w')) { flags |= SWITCH_FOPEN_WRITE; }
+        if(strchr(fstr, 'c')) { flags |= SWITCH_FOPEN_CREATE; }
+        if(strchr(fstr, 'a')) { flags |= SWITCH_FOPEN_APPEND; }
+        if(strchr(fstr, 't')) { flags |= SWITCH_FOPEN_TRUNCATE; }
+        if(strchr(fstr, 'b')) { flags |= SWITCH_FOPEN_BINARY; }
+
+        JS_FreeCString(ctx, fstr);
     } else {
         flags = SWITCH_FOPEN_READ | SWITCH_FOPEN_BINARY;
     }
@@ -230,25 +190,20 @@ static JSValue js_fileio_contructor(JSContext *ctx, JSValueConst new_target, int
         goto fail;
     }
 
-    if(switch_file_open(&fd, path, flags, SWITCH_FPROT_UREAD | SWITCH_FPROT_UWRITE, pool) != SWITCH_STATUS_SUCCESS) {
-        err = JS_ThrowTypeError(ctx, "Couldn't open file: %s", path);
-        goto fail;
-    }
-
     js_fileio = js_mallocz(ctx, sizeof(js_fileio_t));
     if(!js_fileio) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
         goto fail;
     }
-    js_fileio->fd = fd;
     js_fileio->pool = pool;
     js_fileio->path = switch_core_strdup(pool, path);
     js_fileio->flags = flags;
 
-    JS_FreeCString(ctx, path);
-    JS_FreeCString(ctx, flstr);
+    if(switch_file_open(&js_fileio->fd, path, flags, SWITCH_FPROT_UREAD | SWITCH_FPROT_UWRITE, pool) == SWITCH_STATUS_SUCCESS) {
+        fd = js_fileio->fd;
+        goto fail;
+    }
 
-    //
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
@@ -257,13 +212,13 @@ static JSValue js_fileio_contructor(JSContext *ctx, JSValueConst new_target, int
     if(JS_IsException(obj)) { goto fail; }
 
     JS_SetOpaque(obj, js_fileio);
+    JS_FreeCString(ctx, path);
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fileio-constructor: js-fileio=%p, fd=%p\n", js_fileio, js_fileio->fd);
 
     return obj;
 fail:
     JS_FreeCString(ctx, path);
-    JS_FreeCString(ctx, flstr);
     if(fd) {
         switch_file_close(fd);
     }

@@ -853,6 +853,7 @@ static switch_status_t sys_session_hangup_hook(switch_core_session_t *session) {
                 ret_val = JS_Call(ctx, jss->on_hangup, JS_UNDEFINED, 1, (JSValueConst *) args);
                 if(JS_IsException(ret_val)) {
                     ctx_dump_error(NULL, NULL, ctx);
+                    JS_ResetUncatchableError(ctx);
                 }
                 JS_FreeValue(ctx, args[0]);
             }
@@ -879,6 +880,7 @@ static switch_status_t js_record_input_callback(switch_core_session_t *session, 
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
             ctx_dump_error(NULL, NULL, ctx);
+            JS_ResetUncatchableError(ctx);
         }
 
         JS_FreeValue(ctx, args[1]);
@@ -906,6 +908,7 @@ static switch_status_t js_playback_input_callback(switch_core_session_t *session
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
             ctx_dump_error(NULL, NULL, ctx);
+            JS_ResetUncatchableError(ctx);
         }
 
         JS_FreeValue(ctx, args[1]);
@@ -942,6 +945,7 @@ static switch_status_t js_collect_input_callback(switch_core_session_t *session,
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
             ctx_dump_error(NULL, NULL, ctx);
+            JS_ResetUncatchableError(ctx);
         }
 
         JS_FreeValue(ctx, args[1]);
@@ -969,8 +973,6 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("caller_id_name", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NAME),
     JS_CGETSET_MAGIC_DEF("caller_id_number", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NUMBER),
     //
-    //JS_CFUNC_DEF("originate", 2, js_session_originate),                 // deprecated (use new Session(\"<dial string>\", a_leg))
-    //JS_CFUNC_DEF("setCallerData", 2, js_session_set_caller_data),       // deprecated
     JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),
     JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),
     JS_CFUNC_DEF("speak", 1, js_session_speak),
