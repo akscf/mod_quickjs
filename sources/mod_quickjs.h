@@ -114,9 +114,12 @@ switch_status_t js_fileio_class_register_ctx(JSContext *ctx, JSValue global_obj)
 typedef struct {
     uint8_t                 is_open;
     uint8_t                 tmp_file;
+    uint8_t                 type;
     uint32_t                flags;
+    switch_size_t           rdbuf_size;
     char                    *path;
     char                    *name;
+    char                    *rdbuf;
     switch_file_t           *fd;
     switch_dir_t            *dir;
     switch_memory_pool_t    *pool;

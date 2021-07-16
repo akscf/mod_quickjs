@@ -19,36 +19,38 @@
 #define PROP_CREATEION_TIME      9
 #define PROP_LAST_MODIFIED       10
 
+#define TYPE_FILE   1
+#define TYPE_DIR    2
+
 #define FILE_SANITY_CHECK() if (!js_file) { \
            return JS_ThrowTypeError(ctx, "File is not initialized"); \
         }
 
 #define FILE_SANITY_CHECK_OPEN() if (!js_file || !js_file->fd) { \
-           return JS_ThrowTypeError(ctx, "File is closed"); \
+           return JS_ThrowTypeError(ctx, "File is not opened"); \
         }
 
 #define DIR_SANITY_CHECK_OPEN() if (!js_file || !js_file->dir) { \
-           return JS_ThrowTypeError(ctx, "Direactory is closed"); \
+           return JS_ThrowTypeError(ctx, "Direactory is not opened"); \
         }
 
 static JSClassID js_file_class_id;
 static void js_file_finalizer(JSRuntime *rt, JSValue val);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-static switch_size_t xx_try_get_size(char *path) {
+static switch_size_t xx_try_get_size(js_file_t *js_file) {
     switch_file_t *fd = NULL;
     switch_dir_t  *dir = NULL;
     switch_size_t sz = 0;
 
-    if(switch_directory_exists(path, NULL) == SWITCH_STATUS_SUCCESS) {
-        if(switch_dir_open(&dir, path, NULL) == SWITCH_STATUS_SUCCESS) {
+    if(js_file->type == TYPE_DIR || switch_directory_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
+        if(switch_dir_open(&dir, js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
             sz = switch_dir_count(dir);
             switch_dir_close(dir);
         }
-        return sz;
     }
 
-    if(switch_file_open(&fd, path, SWITCH_FOPEN_READ, SWITCH_FPROT_UREAD, NULL) == SWITCH_STATUS_SUCCESS) {
+    if(switch_file_open(&fd, js_file->path, SWITCH_FOPEN_READ, SWITCH_FPROT_UREAD, js_file->pool) == SWITCH_STATUS_SUCCESS) {
         sz = switch_file_get_size(fd);
         switch_file_close(fd);
         return sz;
@@ -57,15 +59,18 @@ static switch_size_t xx_try_get_size(char *path) {
     return 0;
 }
 
-static uint8_t xx_try_access(char *path, int flags) {
+static uint8_t xx_try_access(js_file_t *js_file, int flags) {
     switch_file_t *fd = NULL;
 
-    if(switch_directory_exists(path, NULL) == SWITCH_STATUS_SUCCESS) {
-        return SWITCH_TRUE;
+    if(js_file->type == TYPE_DIR) {
+        if(switch_directory_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
+            return SWITCH_TRUE;
+        }
+        return SWITCH_FALSE;
     }
 
-    if(switch_file_exists(path, NULL) == SWITCH_STATUS_SUCCESS) {
-        if(switch_file_open(&fd, path, flags, SWITCH_FPROT_UREAD, NULL) == SWITCH_STATUS_SUCCESS) {
+    if(js_file->type == TYPE_FILE || switch_file_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
+        if(switch_file_open(&fd, js_file->path, flags, SWITCH_FPROT_UREAD, js_file->pool) == SWITCH_STATUS_SUCCESS) {
             switch_file_close(fd);
             return SWITCH_TRUE;
         }
@@ -99,7 +104,7 @@ static JSValue js_file_property_get(JSContext *ctx, JSValueConst this_val, int m
                     sz = switch_dir_count(js_file->dir);
                 }
             } else {
-                sz = xx_try_get_size(js_file->path);
+                sz = xx_try_get_size(js_file);
             }
             return JS_NewInt64(ctx, sz);
         }
@@ -114,34 +119,42 @@ static JSValue js_file_property_get(JSContext *ctx, JSValueConst this_val, int m
             if(js_file->is_open && js_file->fd) {
                 return (js_file->flags & SWITCH_FOPEN_READ) ? JS_TRUE : JS_FALSE;
             }
-            return xx_try_access(js_file->path, SWITCH_FOPEN_READ) ? JS_TRUE : JS_FALSE;
+            return xx_try_access(js_file, SWITCH_FOPEN_READ) ? JS_TRUE : JS_FALSE;
         }
         case PROP_CAN_WRITE: {
             if(js_file->is_open && js_file->fd) {
                 return (js_file->flags & SWITCH_FOPEN_READ) ? JS_TRUE : JS_FALSE;
             }
-            return xx_try_access(js_file->path, SWITCH_FOPEN_WRITE) ? JS_TRUE : JS_FALSE;
+            return xx_try_access(js_file, SWITCH_FOPEN_WRITE) ? JS_TRUE : JS_FALSE;
         }
         case PROP_IS_OPEN: {
             return (js_file->is_open ? JS_TRUE : JS_FALSE);
         }
         case PROP_IS_FILE: {
+            if(js_file->type && js_file->type == TYPE_FILE) {
+                return JS_TRUE;
+            }
             if(js_file->is_open) {
                 return (js_file->fd ? JS_TRUE : JS_FALSE);
             }
-            if(switch_directory_exists(js_file->path, NULL) == SWITCH_STATUS_SUCCESS) {
+            if(switch_directory_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
                 return JS_FALSE;
             }
-            if(switch_file_exists(js_file->path, NULL) == SWITCH_STATUS_SUCCESS) {
+            if(switch_file_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
+                js_file->type = TYPE_FILE;
                 return JS_TRUE;
             }
             return JS_FALSE;
         }
         case PROP_IS_DIRECTORY: {
+            if(js_file->type && js_file->type == TYPE_DIR) {
+                return JS_TRUE;
+            }
             if(js_file->is_open) {
                 return (js_file->dir ? JS_TRUE : JS_FALSE);
             }
-            if(switch_directory_exists(js_file->path, NULL) == SWITCH_STATUS_SUCCESS) {
+            if(switch_directory_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
+                js_file->type = TYPE_DIR;
                 return JS_TRUE;
             }
             return JS_FALSE;
@@ -174,10 +187,12 @@ static JSValue js_file_exists(JSContext *ctx, JSValueConst this_val, int argc, J
     }
 
     if(switch_directory_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
+        js_file->type = TYPE_DIR;
         return JS_TRUE;
     }
 
     if(switch_file_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
+        js_file->type = TYPE_FILE;
         return JS_TRUE;
     }
 
@@ -214,7 +229,7 @@ static JSValue js_file_open(JSContext *ctx, JSValueConst this_val, int argc, JSV
         return JS_TRUE;
     }
 
-    if(switch_directory_exists(js_file->path, NULL) == SWITCH_STATUS_SUCCESS) {
+    if(js_file->type == TYPE_DIR || switch_directory_exists(js_file->path, NULL) == SWITCH_STATUS_SUCCESS) {
         if(switch_dir_open(&js_file->dir, js_file->path, js_file->pool) != SWITCH_STATUS_SUCCESS) {
             return JS_FALSE;
         }
@@ -326,18 +341,70 @@ static JSValue js_file_write(JSContext *ctx, JSValueConst this_val, int argc, JS
     }
 
     if(switch_file_write(js_file->fd, buf, &len) != SWITCH_STATUS_SUCCESS) {
-        if(len == 0) {
-            return JS_NewInt64(ctx, 0);
-        }
         return JS_EXCEPTION;
     }
 
     return JS_NewInt64(ctx, len);
 }
 
+static JSValue js_file_write_str(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    switch_status_t status;
+    switch_size_t len = 0;
+    const char *str = NULL;
+
+    FILE_SANITY_CHECK_OPEN();
+
+    if(argc < 1)  {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    str = JS_ToCString(ctx, argv[0]);
+    if(!zstr(str)) {
+        return JS_NewInt64(ctx, 0);
+    }
+
+    len = strlen(str);
+    status = switch_file_write(js_file->fd, str, &len);
+    JS_FreeCString(ctx, str);
+
+    return (status == SWITCH_STATUS_SUCCESS ? JS_NewInt64(ctx, len) : JS_EXCEPTION);
+}
+
+static JSValue js_file_read_str(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    switch_size_t len = 0;
+
+    FILE_SANITY_CHECK_OPEN();
+
+    if(argc < 1)  {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    JS_ToInt64(ctx, &len, argv[0]);
+    if(len <= 0) {
+        return JS_UNDEFINED;
+    }
+
+    if(!js_file->rdbuf || len > js_file->rdbuf_size) {
+        js_file->rdbuf_size = len;
+        js_file->rdbuf = switch_core_alloc(js_file->pool, js_file->rdbuf_size);
+    }
+
+    if(switch_file_read(js_file->fd, js_file->rdbuf, &len) != SWITCH_STATUS_SUCCESS) {
+        if(len == 0) {
+            return JS_UNDEFINED;
+        }
+        return JS_EXCEPTION;
+    }
+
+    return JS_NewStringLen(ctx, js_file->rdbuf, len);
+}
+
 static JSValue js_file_seek(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
     int64_t ofs = 0;
+
 
     FILE_SANITY_CHECK_OPEN();
 
@@ -371,12 +438,13 @@ static JSValue js_file_remove(JSContext *ctx, JSValueConst this_val, int argc, J
     }
 
     if(strlen(js_file->path) == 1 && strncmp("/", js_file->path, 1) == 0)  {
-        return JS_ThrowTypeError(ctx, "Root dir can't be removed");
+        return JS_ThrowTypeError(ctx, "Root dir can't be deleted");
     }
 
     cmd = switch_mprintf("rm -rf %s", js_file->path);
     system(cmd);
 
+    js_file->type = 0;
     switch_safe_free(cmd);
 
     return JS_TRUE;
@@ -436,13 +504,13 @@ static JSValue js_file_mkdir(JSContext *ctx, JSValueConst this_val, int argc, JS
 
     FILE_SANITY_CHECK();
 
-   if(switch_directory_exists(js_file->path, NULL) == SWITCH_STATUS_SUCCESS) {
+   if(switch_directory_exists(js_file->path, js_file->pool) == SWITCH_STATUS_SUCCESS) {
         return JS_TRUE;
     }
 
     ret_val = (switch_dir_make_recursive(js_file->path, SWITCH_DEFAULT_DIR_PERMS, NULL) == SWITCH_STATUS_SUCCESS) ? JS_TRUE : JS_FALSE;
 
-    return JS_FALSE;
+    return ret_val;
 }
 
 static JSValue js_file_dir_list(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -472,8 +540,8 @@ static JSValue js_file_dir_list(JSContext *ctx, JSValueConst this_val, int argc,
         }
         switch_snprintf(path_buf, sizeof(path_buf), "%s%s%s", js_file->path, SWITCH_PATH_SEPARATOR, fname);
 
-        args[0] = JS_NewString(ctx, fname);
-        args[1] = JS_NewString(ctx, path_buf);
+        args[0] = JS_NewString(ctx, path_buf);
+        args[1] = JS_NewString(ctx, fname);
 
         ret_val = JS_Call(ctx, js_cb, this_val, 2, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
@@ -514,6 +582,8 @@ static const JSCFunctionListEntry js_file_proto_funcs[] = {
     JS_CFUNC_DEF("close", 0, js_file_close),
     JS_CFUNC_DEF("read", 2, js_file_read),
     JS_CFUNC_DEF("write", 2, js_file_write),
+    JS_CFUNC_DEF("writeString", 2, js_file_write_str),
+    JS_CFUNC_DEF("readString", 1, js_file_read_str),
     JS_CFUNC_DEF("seek", 1, js_file_seek),
     JS_CFUNC_DEF("remove", 0, js_file_remove),
     JS_CFUNC_DEF("rename", 1, js_file_rename),

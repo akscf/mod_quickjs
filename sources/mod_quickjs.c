@@ -415,7 +415,7 @@ static switch_status_t script_load_code(script_t *script) {
         status = SWITCH_STATUS_FALSE;
         goto out;
     }
-    if((script->code = switch_core_alloc(script->pool, script->code_length)) == NULL)  {
+    if((script->code = switch_core_alloc(script->pool, script->code_length + 1)) == NULL)  {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
         status = SWITCH_STATUS_MEMERR;
         goto out;
@@ -424,6 +424,7 @@ static switch_status_t script_load_code(script_t *script) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't read file\n");
         return SWITCH_STATUS_GENERR;
     }
+    script->code[script->code_length] = '\0';
 out:
     switch_file_close(fd);
     return status;
