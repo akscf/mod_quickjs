@@ -686,14 +686,12 @@ JSClassID js_file_class_get_id() {
     return js_file_class_id;
 }
 
-void js_file_class_register_rt(JSRuntime *rt) {
-    JS_NewClassID(&js_file_class_id);
-    JS_NewClass(rt, js_file_class_id, &js_file_class);
-}
-
-switch_status_t js_file_class_register_ctx(JSContext *ctx, JSValue global_obj) {
+switch_status_t js_file_class_register(JSContext *ctx, JSValue global_obj) {
     JSValue obj_proto;
     JSValue obj_class;
+
+    JS_NewClassID(&js_file_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_file_class_id, &js_file_class);
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_file_proto_funcs, ARRAY_SIZE(js_file_proto_funcs));

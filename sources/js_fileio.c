@@ -239,14 +239,12 @@ JSClassID js_fileio_class_get_id() {
     return js_fileio_class_id;
 }
 
-void js_fileio_class_register_rt(JSRuntime *rt) {
-    JS_NewClassID(&js_fileio_class_id);
-    JS_NewClass(rt, js_fileio_class_id, &js_fileio_class);
-}
-
-switch_status_t js_fileio_class_register_ctx(JSContext *ctx, JSValue global_obj) {
+switch_status_t js_fileio_class_register(JSContext *ctx, JSValue global_obj) {
     JSValue obj_proto;
     JSValue obj_class;
+
+    JS_NewClassID(&js_fileio_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_fileio_class_id, &js_fileio_class);
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_fileio_proto_funcs, ARRAY_SIZE(js_fileio_proto_funcs));

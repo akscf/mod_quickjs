@@ -127,7 +127,7 @@ static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Invalid argument: callback function");
     }
 
-    if(JS_IsUndefined(argv[0])) {
+    if(JS_IsNull(argv[0]) || JS_IsUndefined(argv[0])) {
         jss->fl_hup_hook = SWITCH_FALSE;
 
     } else if(JS_IsFunction(ctx, argv[0])) {
@@ -836,7 +836,8 @@ static JSValue js_session_destroy(JSContext *ctx, JSValueConst this_val, int arg
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-// callbacks
+// handlers
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static switch_status_t sys_session_hangup_hook(switch_core_session_t *session) {
     switch_channel_t *channel = switch_core_session_get_channel(session);
     switch_channel_state_t state = switch_channel_get_state(channel);
@@ -1078,7 +1079,9 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
 
     return obj;
 fail:
-    js_free(ctx, jss);
+    if(jss) {
+        js_free(ctx, jss);
+    }
     JS_FreeValue(ctx, obj);
     return (has_error ? error : JS_EXCEPTION);
 }
@@ -1090,14 +1093,12 @@ JSClassID js_seesion_class_get_id() {
     return js_session_class_id;
 }
 
-void js_session_class_register_rt(JSRuntime *rt) {
-    JS_NewClassID(&js_session_class_id);
-    JS_NewClass(rt, js_session_class_id, &js_session_class);
-}
-
-switch_status_t js_session_class_register_ctx(JSContext *ctx, JSValue global_obj) {
+switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj) {
     JSValue obj_proto;
     JSValue obj_class;
+
+    JS_NewClassID(&js_session_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_session_class_id, &js_session_class);
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));
@@ -1151,12 +1152,12 @@ JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_ThrowTypeError(ctx, "Invalid arguments");
     }
 
-    jss_a = JS_GetOpaque(argv[0], js_seesion_class_get_id());
+    jss_a = JS_GetOpaque(argv[0], js_session_class_id);
     if(!(jss_a && jss_a->session)) {
         return JS_ThrowTypeError(ctx, "Session A is not ready");
     }
 
-    jss_b = JS_GetOpaque(argv[1], js_seesion_class_get_id());
+    jss_b = JS_GetOpaque(argv[1], js_session_class_id);
     if(!(jss_b && jss_b->session)) {
         return JS_ThrowTypeError(ctx, "Session B is not ready");
     }

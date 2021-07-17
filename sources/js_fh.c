@@ -420,7 +420,9 @@ fail:
     if(fh) {
         switch_core_file_close(js_fh->fh);
     }
-    js_free(ctx, js_fh);
+    if(js_fh) {
+        js_free(ctx, js_fh);
+    }
     JS_FreeValue(ctx, obj);
     return (JS_IsUndefined(err) ? JS_EXCEPTION : err);
 }
@@ -432,14 +434,12 @@ JSClassID js_file_handle_class_get_id() {
     return js_fh_class_id;
 }
 
-void js_file_handle_class_register_rt(JSRuntime *rt) {
-    JS_NewClassID(&js_fh_class_id);
-    JS_NewClass(rt, js_fh_class_id, &js_fh_class);
-}
-
-switch_status_t js_file_handle_class_register_ctx(JSContext *ctx, JSValue global_obj) {
+switch_status_t js_file_handle_class_register(JSContext *ctx, JSValue global_obj) {
     JSValue obj_proto;
     JSValue obj_class;
+
+    JS_NewClassID(&js_fh_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_fh_class_id, &js_fh_class);
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_fh_proto_funcs, ARRAY_SIZE(js_fh_proto_funcs));

@@ -271,7 +271,9 @@ fail:
     if(event) {
         switch_event_destroy(&js_event->event);
     }
-    js_free(ctx, js_event);
+    if(js_event) {
+        js_free(ctx, js_event);
+    }
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
 }
@@ -283,14 +285,12 @@ JSClassID js_event_class_get_id() {
     return js_event_class_id;
 }
 
-void js_event_class_register_rt(JSRuntime *rt) {
-    JS_NewClassID(&js_event_class_id);
-    JS_NewClass(rt, js_event_class_id, &js_event_class);
-}
-
-switch_status_t js_event_class_register_ctx(JSContext *ctx, JSValue global_obj) {
+switch_status_t js_event_class_register(JSContext *ctx, JSValue global_obj) {
     JSValue obj_proto;
     JSValue obj_class;
+
+    JS_NewClassID(&js_event_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), js_event_class_id, &js_event_class);
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_event_proto_funcs, ARRAY_SIZE(js_event_proto_funcs));

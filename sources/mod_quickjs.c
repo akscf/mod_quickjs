@@ -442,13 +442,14 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     JS_SetPropertyStr(ctx, global_obj, "script_name", JS_NewString(ctx, script->name));
     JS_SetPropertyStr(ctx, global_obj, "script_instance", JS_NewInt32(ctx, script_instance->id));
 
-    /* freeswitch classes */
-    js_session_class_register_ctx(ctx, global_obj);
-    js_file_handle_class_register_ctx(ctx, global_obj);
-    js_event_class_register_ctx(ctx, global_obj);
-    js_dtmf_class_register_ctx(ctx, global_obj);
-    js_fileio_class_register_ctx(ctx, global_obj);
-    js_file_class_register_ctx(ctx, global_obj);
+    /* built-in classes */
+    js_session_class_register(ctx, global_obj);
+    js_file_handle_class_register(ctx, global_obj);
+    js_event_class_register(ctx, global_obj);
+    js_dtmf_class_register(ctx, global_obj);
+    js_fileio_class_register(ctx, global_obj);
+    js_file_class_register(ctx, global_obj);
+    js_teletone_class_register(ctx, global_obj);
 
     /* script arguments */
     if(!zstr(script_instance->args)) {
@@ -829,12 +830,6 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     }
     JS_SetCanBlock(globals.qjs_rt, 1);
     JS_SetRuntimeInfo(globals.qjs_rt, "mod_quickjs");
-    js_session_class_register_rt(globals.qjs_rt);
-    js_file_handle_class_register_rt(globals.qjs_rt);
-    js_event_class_register_rt(globals.qjs_rt);
-    js_dtmf_class_register_rt(globals.qjs_rt);
-    js_fileio_class_register_rt(globals.qjs_rt);
-    js_file_class_register_rt(globals.qjs_rt);
 
     /* xml config */
     if((xml = switch_xml_open_cfg(CONFIG_NAME, &cfg, NULL)) == NULL) {
