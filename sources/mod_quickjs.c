@@ -624,7 +624,7 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
     char *script_buf_local = NULL, *script_tmp_buff = NULL;
     JSValue result;
 
-    if(script->fl_do_kill || script_instance->fl_do_kill || script->fl_destroyed || script_instance->fl_destroyed || globals.fl_shutdown) {
+    if(script->fl_destroyed || script_instance->fl_destroyed || globals.fl_shutdown) {
         goto out;
     }
 
@@ -710,7 +710,8 @@ static void event_handler_shutdown(switch_event_t *event) {
 
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
-    "run scriptName [args] - launch a new script instance\n"
+    "run scriptName [args] - launch a new script instance\n" \
+    "int scriptName [id]   - interrrupt script/instance\n"
 
 SWITCH_STANDARD_API(quickjs_cmd) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -770,6 +771,14 @@ SWITCH_STANDARD_API(quickjs_cmd) {
         }
         goto out;
     }
+    if(strcasecmp(argv[0], "int") == 0) {
+        char *sname = argc > 2 ? argv[1] : NULL;
+        char *sid = argc > 3 ? argv[2] : NULL;
+
+        stream->write_function(stream, "-ERR: not yet implemented\n");
+
+        goto out;
+    }
     goto out;
 usage:
     stream->write_function(stream, "-USAGE: %s\n", CMD_SYNTAX);
@@ -812,7 +821,7 @@ out:
 #define CONFIG_NAME "quickjs.conf"
 SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
-    switch_xml_t cfg = NULL, xml = NULL, settings = NULL, param = NULL;
+    switch_xml_t cfg = NULL, xml = NULL, xml_settings = NULL, xml_param = NULL, xml_scripts = NULL, xml_script = NULL;
     switch_api_interface_t *cmd_interface;
     switch_application_interface_t *app_interface;
 
@@ -836,11 +845,22 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't open: %s\n", CONFIG_NAME);
         switch_goto_status(SWITCH_STATUS_GENERR, done);
     }
-    if((settings = switch_xml_child(cfg, "settings"))) {
-        for(param = switch_xml_child(settings, "param"); param; param = param->next) {
-            char *var = (char *) switch_xml_attr_soft(param, "name");
-            char *val = (char *) switch_xml_attr_soft(param, "value");
+    if((xml_settings = switch_xml_child(cfg, "settings"))) {
+        for(xml_param = switch_xml_child(xml_settings, "param"); xml_param; xml_param = xml_param->next) {
+            char *var = (char *) switch_xml_attr_soft(xml_param, "name");
+            char *val = (char *) switch_xml_attr_soft(xml_param, "value");
+        }
+    }
+    if((xml_scripts = switch_xml_child(cfg, "autoload-scripts"))) {
+        for(xml_script = switch_xml_child(xml_scripts, "script"); xml_script; xml_script = xml_script->next) {
+            char *path = (char *) switch_xml_attr_soft(xml_script, "path");
+            char *args = (char *) switch_xml_attr_soft(xml_script, "args");
 
+            if(!zstr(path)) {
+                if(script_launch(NULL, path, args, SWITCH_TRUE) != SWITCH_STATUS_SUCCESS) {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Failed to launch script: %s", path);
+                }
+            }
         }
     }
 
@@ -882,7 +902,9 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
         script = (script_t *) hval;
 
         if(script_sem_take(script)) {
-            script->fl_do_kill = SWITCH_TRUE;
+            //
+            // todo: try to interrupt
+            //
             script_sem_release(script);
         }
     }

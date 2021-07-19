@@ -289,8 +289,10 @@ switch_status_t js_event_class_register(JSContext *ctx, JSValue global_obj) {
     JSValue obj_proto;
     JSValue obj_class;
 
-    JS_NewClassID(&js_event_class_id);
-    JS_NewClass(JS_GetRuntime(ctx), js_event_class_id, &js_event_class);
+    if(!js_event_class_id) {
+        JS_NewClassID(&js_event_class_id);
+        JS_NewClass(JS_GetRuntime(ctx), js_event_class_id, &js_event_class);
+    }
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_event_proto_funcs, ARRAY_SIZE(js_event_proto_funcs));

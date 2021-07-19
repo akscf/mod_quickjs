@@ -16,7 +16,6 @@
 typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
-    uint8_t                 fl_do_kill;
     uint32_t                id;
     uint32_t                tx_sem;
     const char              *session_id;
@@ -31,7 +30,6 @@ typedef struct {
 typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
-    uint8_t                 fl_do_kill;
     uint32_t                id;
     uint32_t                tx_sem;
     uint32_t                instances;

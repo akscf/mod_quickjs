@@ -79,9 +79,8 @@ static JSValue js_fh_property_set(JSContext *ctx, JSValueConst this_val, JSValue
                     js_fh->fh->speed = 0;
                 } else {
                     if(sval[0] == '+' || sval[0] == '-') {
-                        int step = atoi(sval + 1);
-                        if(!step) { step = 1;}
-                        js_fh->fh->speed += step;
+                        int step = atoi(sval);
+                        js_fh->fh->speed += (!step ? 1 : step);
                     } else {
                         js_fh->fh->speed = atoi(sval);
                     }
@@ -100,9 +99,8 @@ static JSValue js_fh_property_set(JSContext *ctx, JSValueConst this_val, JSValue
                     js_fh->fh->vol = 0;
                 } else {
                     if(sval[0] == '+' || sval[0] == '-') {
-                        int step = atoi(sval + 1);
-                        if(!step) { step = 1;}
-                        js_fh->fh->vol += step;
+                        int step = atoi(sval);
+                        js_fh->fh->vol += (!step ? 1 : step);
                     } else {
                         js_fh->fh->vol = atoi(sval);
                     }
@@ -438,8 +436,10 @@ switch_status_t js_file_handle_class_register(JSContext *ctx, JSValue global_obj
     JSValue obj_proto;
     JSValue obj_class;
 
-    JS_NewClassID(&js_fh_class_id);
-    JS_NewClass(JS_GetRuntime(ctx), js_fh_class_id, &js_fh_class);
+    if(!js_fh_class_id) {
+        JS_NewClassID(&js_fh_class_id);
+        JS_NewClass(JS_GetRuntime(ctx), js_fh_class_id, &js_fh_class);
+    }
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_fh_proto_funcs, ARRAY_SIZE(js_fh_proto_funcs));

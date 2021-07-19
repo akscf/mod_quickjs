@@ -1097,8 +1097,10 @@ switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj) {
     JSValue obj_proto;
     JSValue obj_class;
 
-    JS_NewClassID(&js_session_class_id);
-    JS_NewClass(JS_GetRuntime(ctx), js_session_class_id, &js_session_class);
+    if(!js_session_class_id) {
+        JS_NewClassID(&js_session_class_id);
+        JS_NewClass(JS_GetRuntime(ctx), js_session_class_id, &js_session_class);
+    }
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));

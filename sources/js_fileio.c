@@ -243,8 +243,10 @@ switch_status_t js_fileio_class_register(JSContext *ctx, JSValue global_obj) {
     JSValue obj_proto;
     JSValue obj_class;
 
-    JS_NewClassID(&js_fileio_class_id);
-    JS_NewClass(JS_GetRuntime(ctx), js_fileio_class_id, &js_fileio_class);
+    if(!js_fileio_class_id) {
+        JS_NewClassID(&js_fileio_class_id);
+        JS_NewClass(JS_GetRuntime(ctx), js_fileio_class_id, &js_fileio_class);
+    }
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_fileio_proto_funcs, ARRAY_SIZE(js_fileio_proto_funcs));

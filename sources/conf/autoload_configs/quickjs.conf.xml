@@ -2,5 +2,12 @@
     <settings>
     </settings>
 
+    <autoload-scripts>
+	<!--
+	<script path="script1.js" args="a1 a2 a3"/>
+	<script path="script2.js" args=""/>
+	-->
+    </autoload-scripts>
+    
 </configuration>
 
