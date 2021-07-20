@@ -829,6 +829,61 @@ static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc,
     return JS_TRUE;
 }
 
+static JSValue js_session_gen_tones(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_channel_t *channel = NULL;
+    input_callback_state_t cb_state = { 0 };
+    switch_input_callback_function_t dtmf_func = NULL;
+    switch_input_args_t args = { 0 };
+    const char *tone_script = NULL;
+    int len = 0, loops = 0;
+    char *buf = NULL, *p = NULL;
+    void *bp = NULL;
+
+    SESSION_SANITY_CHECK();
+    channel = switch_core_session_get_channel(jss->session);
+    CHANNEL_SANITY_CHECK();
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    tone_script = JS_ToCString(ctx, argv[0]);
+    if(zstr(tone_script)) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: toneScript");
+    }
+
+    buf = switch_core_session_strdup(jss->session, tone_script);
+    JS_FreeCString(ctx, tone_script);
+
+    if((p = strchr(buf, '|'))) {
+        *p++ = '\0';
+        loops = atoi(p);
+        if(loops < 0) { loops = -1; }
+    }
+
+    if(argc > 1 && JS_IsFunction(ctx, argv[1]) ) {
+        memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss_obj = this_val;
+        cb_state.jss = jss;
+        cb_state.arg = (argc > 2 ? argv[2] : JS_UNDEFINED);
+        cb_state.function = argv[1];
+
+        dtmf_func = js_collect_input_callback;
+        bp = &cb_state;
+        len = sizeof(cb_state);
+    }
+
+    args.input_callback = dtmf_func;
+    args.buf = bp;
+    args.buflen = len;
+
+    switch_channel_set_variable(channel, SWITCH_PLAYBACK_TERMINATOR_USED, "");
+    switch_ivr_gentones(jss->session, tone_script, loops, &args);
+
+    return JS_TRUE;
+}
+
 static JSValue js_session_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
@@ -999,6 +1054,9 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("hangup", 0, js_session_hangup),
     JS_CFUNC_DEF("execute", 0, js_session_execute),
     JS_CFUNC_DEF("sleep", 1, js_session_sleep),
+    JS_CFUNC_DEF("genTones", 1, js_session_gen_tones), // instead of Teletone
+    //JS_CFUNC_DEF("frameRead", 2, js_session_frame_read),
+    //JS_CFUNC_DEF("frameWrite", 2, js_session_frame_write),
     JS_CFUNC_DEF("destroy", 0, js_session_destroy),
 };
 

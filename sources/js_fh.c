@@ -198,9 +198,9 @@ static JSValue js_fh_seek(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 
 static JSValue js_fh_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
-    switch_size_t size = 0;
+    switch_size_t buf_size = 0;
     switch_size_t len = 0;
-    uint8_t *buf;
+    uint8_t *buf = NULL;
 
     FH_SANITY_CHECK();
 
@@ -208,16 +208,16 @@ static JSValue js_fh_read(JSContext *ctx, JSValueConst this_val, int argc, JSVal
         return JS_ThrowTypeError(ctx, "Invalid arguments");
     }
 
-    buf = JS_GetArrayBuffer(ctx, &size, argv[0]);
+    buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
     if(!buf) {
-        return JS_EXCEPTION;
+        return JS_ThrowTypeError(ctx, "Invalid argument: arrayBuffer");
     }
 
     JS_ToInt64(ctx, &len, argv[1]);
     if(len <= 0) {
         return JS_NewInt64(ctx, 0);
     }
-    if(len > size) {
+    if(len > buf_size) {
         return JS_ThrowRangeError(ctx, "Array buffer overflow (len > array size)");
     }
 
@@ -233,9 +233,9 @@ static JSValue js_fh_read(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 
 static JSValue js_fh_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
-    switch_size_t size = 0;
+    switch_size_t buf_size = 0;
     switch_size_t len = 0;
-    uint8_t *buf;
+    uint8_t *buf = NULL;
 
     FH_SANITY_CHECK();
 
@@ -243,13 +243,16 @@ static JSValue js_fh_write(JSContext *ctx, JSValueConst this_val, int argc, JSVa
         return JS_ThrowTypeError(ctx, "Invalid arguments");
     }
 
-    JS_ToInt64(ctx, &len, argv[1]);
-    buf = JS_GetArrayBuffer(ctx, &size, argv[0]);
-
+    buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
     if(!buf) {
-        return JS_EXCEPTION;
+        return JS_ThrowTypeError(ctx, "Invalid argument: arrayBuffer");
     }
-    if(len > size) {
+
+    JS_ToInt64(ctx, &len, argv[1]);
+    if(len <= 0) {
+        return JS_NewInt64(ctx, 0);
+    }
+    if(len > buf_size) {
         return JS_ThrowRangeError(ctx, "Array buffer overflow (len > array size)");
     }
 

@@ -449,7 +449,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     js_dtmf_class_register(ctx, global_obj);
     js_fileio_class_register(ctx, global_obj);
     js_file_class_register(ctx, global_obj);
-    js_teletone_class_register(ctx, global_obj);
+    js_socket_class_register(ctx, global_obj);
 
     /* script arguments */
     if(!zstr(script_instance->args)) {
@@ -481,6 +481,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
+    //JS_SetPropertyStr(ctx, global_obj, "setInterruptHandler", JS_NewCFunction(ctx, js_global_get, "setInterruptHandler", 2));
 
     JS_FreeValue(ctx, global_obj);
     return status;
