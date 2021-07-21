@@ -754,6 +754,13 @@ mod_quickjs_la-js_socket.lo: js_socket.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -c -o mod_quickjs_la-js_socket.lo `test -f 'js_socket.c' || echo '$(srcdir)/'`js_socket.c
 
+mod_quickjs_la-js_codec.lo: js_codec.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -MT mod_quickjs_la-js_codec.lo -MD -MP -MF $(DEPDIR)/mod_quickjs_la-js_codec.Tpo -c -o mod_quickjs_la-js_code.lo `test -f 'js_codec.c' || echo '$(srcdir)/'`js_codec.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/mod_quickjs_la-js_codec.Tpo $(DEPDIR)/mod_quickjs_la-js_codec.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='js_codec.c' object='mod_quickjs_la-js_codec.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -c -o mod_quickjs_la-js_codec.lo `test -f 'js_codec.c' || echo '$(srcdir)/'`js_codec.c
+
 mostlyclean-libtool:
 	-rm -f *.lo
 

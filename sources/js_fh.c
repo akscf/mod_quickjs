@@ -337,7 +337,7 @@ static JSValue js_fh_contructor(JSContext *ctx, JSValueConst new_target, int arg
         if(argc > 1) {
             jss = JS_GetOpaque(argv[1], js_seesion_class_get_id());
             if(!jss || !jss->session) {
-                err = JS_ThrowTypeError(ctx, "Session is not ready");
+                err = JS_ThrowTypeError(ctx, "invalid argument: session");
                 goto fail;
             }
             channel = switch_core_session_get_channel(jss->session);

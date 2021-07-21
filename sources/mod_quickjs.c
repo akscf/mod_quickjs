@@ -444,6 +444,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
 
     /* built-in classes */
     js_session_class_register(ctx, global_obj);
+    js_codec_class_register(ctx, global_obj);
     js_file_handle_class_register(ctx, global_obj);
     js_event_class_register(ctx, global_obj);
     js_dtmf_class_register(ctx, global_obj);

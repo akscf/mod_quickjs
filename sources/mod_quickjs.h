@@ -59,9 +59,26 @@ switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj);
 JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session);
 JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
+// Codec
+typedef struct {
+    uint8_t                 fl_can_destroy;
+    uint32_t                samplerate;
+    uint32_t                channels;
+    uint32_t                ptime;
+    uint32_t                flags;
+    const char              *name;
+    switch_memory_pool_t    *pool;
+    switch_codec_t          *codec;
+    switch_codec_t          codec_base;
+} js_codec_t;
+JSClassID js_code_class_get_id();
+switch_status_t js_codec_class_register(JSContext *ctx, JSValue global_obj);
+JSValue js_codec_from_session_wcodec(JSContext *ctx, switch_core_session_t *session);
+JSValue js_codec_from_session_rcodec(JSContext *ctx, switch_core_session_t *session);
+
 // DTMF
 typedef struct {
-    switch_dtmf_t       *dtmf;
+    switch_dtmf_t           *dtmf;
 } js_dtmf_t;
 
 JSClassID js_dtmf_class_get_id();
@@ -70,7 +87,7 @@ JSValue js_dtmf_object_create(JSContext *ctx, switch_dtmf_t *dtmf);
 
 // Event
 typedef struct {
-    switch_event_t      *event;
+    switch_event_t          *event;
 } js_event_t;
 
 JSClassID js_event_class_get_id();

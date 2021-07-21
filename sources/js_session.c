@@ -16,6 +16,11 @@
 #define PROP_CALLER_ID_NUMBER       6
 #define PROP_PROFILE_DIALPLAN       7
 #define PROP_PROFILE_DESTINATION    8
+#define PROP_RCODEC_NAME            9
+#define PROP_WCODEC_NAME            10
+#define PROP_SAMPLERATE             11
+#define PROP_CHANNELS               12
+#define PROP_PTIME                  13
 
 #define SESSION_SANITY_CHECK() if (!jss || !jss->session) { \
            return JS_ThrowTypeError(ctx, "Session is not initialized"); \
@@ -69,6 +74,7 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
     switch_caller_profile_t *caller_profile = NULL;
+    switch_codec_implementation_t read_impl = { 0 };
 
     SESSION_SANITY_CHECK();
 
@@ -106,6 +112,30 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
         case PROP_PROFILE_DESTINATION:
             if(!caller_profile) { return JS_UNDEFINED; }
             return JS_NewString(ctx, caller_profile->destination_number);
+
+        case PROP_SAMPLERATE:
+            switch_core_session_get_read_impl(jss->session, &read_impl);
+            return JS_NewInt32(ctx, read_impl.samples_per_second);
+
+        case PROP_CHANNELS:
+            switch_core_session_get_read_impl(jss->session, &read_impl);
+            return JS_NewInt32(ctx, read_impl.number_of_channels);
+
+        case PROP_PTIME:
+            switch_core_session_get_read_impl(jss->session, &read_impl);
+            return JS_NewInt32(ctx, read_impl.microseconds_per_packet / 1000);
+
+        case PROP_RCODEC_NAME: {
+            const char *name = switch_channel_get_variable(channel, "read_codec");
+            if(!zstr(name)) { JS_NewString(ctx, name); }
+            return JS_UNDEFINED;
+        }
+
+        case PROP_WCODEC_NAME: {
+            const char *name = switch_channel_get_variable(channel, "write_codec");
+            if(!zstr(name)) { JS_NewString(ctx, name); }
+            return JS_UNDEFINED;
+        }
     }
     return JS_UNDEFINED;
 }
@@ -884,6 +914,22 @@ static JSValue js_session_gen_tones(JSContext *ctx, JSValueConst this_val, int a
     return JS_TRUE;
 }
 
+static JSValue js_session_get_read_codec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+
+    SESSION_SANITY_CHECK();
+
+    return js_codec_from_session_rcodec(ctx, jss->session);
+}
+
+static JSValue js_session_get_write_codec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+
+    SESSION_SANITY_CHECK();
+
+    return js_codec_from_session_wcodec(ctx, jss->session);
+}
+
 static JSValue js_session_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
@@ -1028,6 +1074,13 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("destination", js_session_property_get, js_session_property_set, PROP_PROFILE_DESTINATION),
     JS_CGETSET_MAGIC_DEF("caller_id_name", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NAME),
     JS_CGETSET_MAGIC_DEF("caller_id_number", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NUMBER),
+    JS_CGETSET_MAGIC_DEF("callerIDName", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NAME),
+    JS_CGETSET_MAGIC_DEF("callerIDNumber", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NUMBER),
+    JS_CGETSET_MAGIC_DEF("readCodecName", js_session_property_get, js_session_property_set, PROP_RCODEC_NAME),
+    JS_CGETSET_MAGIC_DEF("writeCodecName", js_session_property_get, js_session_property_set, PROP_WCODEC_NAME),
+    JS_CGETSET_MAGIC_DEF("samplerate", js_session_property_get, js_session_property_set, PROP_SAMPLERATE),
+    JS_CGETSET_MAGIC_DEF("channels", js_session_property_get, js_session_property_set, PROP_CHANNELS),
+    JS_CGETSET_MAGIC_DEF("ptime", js_session_property_get, js_session_property_set, PROP_PTIME),
     //
     JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),
     JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),
@@ -1047,14 +1100,16 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("ready", 0, js_session_is_ready),
     JS_CFUNC_DEF("answered", 0, js_session_is_answered),
     JS_CFUNC_DEF("mediaReady", 0, js_session_is_media_ready),
-    JS_CFUNC_DEF("waitForAnswer", 0, js_session_wait_for_answer),
-    JS_CFUNC_DEF("waitForMedia", 0, js_session_wait_for_media),
+    JS_CFUNC_DEF("waitForAnswer", 0, js_session_wait_for_answer),   // deprecated
+    JS_CFUNC_DEF("waitForMedia", 0, js_session_wait_for_media),     // deprecated
     JS_CFUNC_DEF("getEvent", 0, js_session_get_event),
     JS_CFUNC_DEF("sendEvent", 0, js_session_send_event),
     JS_CFUNC_DEF("hangup", 0, js_session_hangup),
     JS_CFUNC_DEF("execute", 0, js_session_execute),
     JS_CFUNC_DEF("sleep", 1, js_session_sleep),
-    JS_CFUNC_DEF("genTones", 1, js_session_gen_tones), // instead of Teletone
+    JS_CFUNC_DEF("genTones", 1, js_session_gen_tones),              // instead of Teletone
+    JS_CFUNC_DEF("getReadCodec", 0, js_session_get_read_codec),
+    JS_CFUNC_DEF("getWriteCodec", 0, js_session_get_write_codec),
     //JS_CFUNC_DEF("frameRead", 2, js_session_frame_read),
     //JS_CFUNC_DEF("frameWrite", 2, js_session_frame_write),
     JS_CFUNC_DEF("destroy", 0, js_session_destroy),
