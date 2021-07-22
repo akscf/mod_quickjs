@@ -270,10 +270,10 @@ static JSValue js_socket_write_string(JSContext *ctx, JSValueConst this_val, int
 
 static JSValue js_socket_read_string(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
-    char *usr_delimiter = NULL;
-    char *delimiter = NULL;
-    char tempbuf[2] = "";
-    uint32_t ofs = 0, i = 0;
+    const char *usr_delimiter = NULL;
+    const char *def_delimiter = "\n";
+    char tmp[1024] = "";
+    uint32_t ofs = 0, i = 0, found = 0;
     switch_size_t len = 0;
     switch_size_t total_length = 0;
     switch_status_t status = SWITCH_STATUS_FALSE;
@@ -283,54 +283,49 @@ static JSValue js_socket_read_string(JSContext *ctx, JSValueConst this_val, int 
     if(!js_socket->opened) {
         return JS_ThrowTypeError(ctx, "Socket is closed");
     }
-    /*if(argc > 0) {
+    if(argc > 0) {
         usr_delimiter = JS_ToCString(ctx, argv[0]);
-        if(!zstr(usr_delimiter)) {
-            delimiter = usr_delimiter;
-        }
     }
-    if(zstr(delimiter)) {
-        delimiter = "\n";
-    }
-    if(!js_socket->read_buffer) {
-        js_socket->read_buffer = switch_core_alloc(js_socket->pool, js_socket->buffer_size);
-    }*/
 
-    //
-    // todo
-    //
-    /*
-    len = 1;
+    if(!js_socket->read_buffer) {
+        js_socket->buffer_size = 4096;
+        js_socket->read_buffer = switch_core_alloc(js_socket->pool, js_socket->buffer_size);
+    }
+
     while(1) {
-        if((status = switch_socket_recv(js_socket->socket, tempbuf, &len)) != SWITCH_STATUS_SUCCESS) {
+        len = sizeof(tmp);
+        status = switch_socket_recv(js_socket->socket, tmp, &len);
+        if(status != SWITCH_STATUS_SUCCESS || !len) {
             break;
         }
-        tempbuf[1] = '\0';
-        if(tempbuf[0] == delimiter[0]) {
-            break;
-        } else if (tempbuf[0] == '\r' && delimiter[0] == '\n') {
-            continue;
-        } else {
-            if(total_length == socket->buffer_size - 1) {
-                char *new_buffer = NULL;
-                switch_size_t new_size = js_socket->buffer_size + 4196;
-                new_buffer = switch_core_alloc(js_socket->pool, js_socket->buffer_size);
-                memcpy(new_buffer, js_socket->read_buffer, total_length);
-                js_socket->buffer_size = new_size;
-                js_socket->read_buffer = new_buffer;
+        for(i = 0; i < len; i++) {
+            const char *delim = (usr_delimiter ? usr_delimiter : def_delimiter);
+            if(tmp[i] == delim[0]) {
+                found = 1; len = i; break;
             }
-            socket->read_buffer[total_length] = tempbuf[0];
-            ++total_length;
+        }
+        ofs = total_length;
+        total_length += len;
+        if(total_length > js_socket->buffer_size) {
+            char *new_buf = switch_core_alloc(js_socket->pool, total_length);
+            memcpy(new_buf, js_socket->read_buffer, js_socket->buffer_size);
+            memcpy(new_buf + js_socket->buffer_size, tmp, len);
+            js_socket->buffer_size = total_length;
+            js_socket->read_buffer = new_buf;
+        } else {
+            memcpy(js_socket->read_buffer + ofs , tmp, len);
+        }
+        if(found) {
+            break;
         }
     }
     JS_FreeCString(ctx, usr_delimiter);
 
-    if(status == SWITCH_STATUS_SUCCESS) {
-        js_socket->read_buffer[total_length] = '\0';
-        return JS_TRUE;
-    }*/
+    if(status == SWITCH_STATUS_SUCCESS && total_length > 0) {
+        return JS_NewStringLen(ctx, js_socket->read_buffer, total_length);
+    }
 
-    return JS_FALSE;
+    return JS_UNDEFINED;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------

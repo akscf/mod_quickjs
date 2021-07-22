@@ -103,8 +103,12 @@ static JSValue js_codec_encode(JSContext *ctx, JSValueConst this_val, int argc, 
     }
 
     JS_ToInt32(ctx, &src_samplerate, argv[1]);
+    JS_ToInt32(ctx, &dst_samplerate, argv[4]);
     JS_ToInt32(ctx, &src_len, argv[2]);
 
+    if(!dst_samplerate) {
+        dst_samplerate = src_samplerate;
+    }
     if(!src_samplerate) {
         return JS_ThrowTypeError(ctx, "Invalid argument: srcSamplerate");
     }
@@ -116,7 +120,6 @@ static JSValue js_codec_encode(JSContext *ctx, JSValueConst this_val, int argc, 
     }
 
     dst_len = dst_buf_size;
-    dst_samplerate = src_samplerate;
     status = switch_core_codec_encode(js_codec->codec, NULL, src_buf, src_len, src_samplerate, dst_buf, &dst_len, &dst_samplerate, &flags);
     if(status != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't encode buffer (err:%d)\n", status);
@@ -159,8 +162,12 @@ static JSValue js_codec_decode(JSContext *ctx, JSValueConst this_val, int argc, 
     }
 
     JS_ToInt32(ctx, &src_samplerate, argv[1]);
+    JS_ToInt32(ctx, &dst_samplerate, argv[4]);
     JS_ToInt32(ctx, &src_len, argv[2]);
 
+    if(!dst_samplerate) {
+        dst_samplerate = src_samplerate;
+    }
     if(!src_samplerate) {
         return JS_ThrowTypeError(ctx, "Invalid argument: srcSamplerate");
     }
@@ -172,7 +179,6 @@ static JSValue js_codec_decode(JSContext *ctx, JSValueConst this_val, int argc, 
     }
 
     dst_len = dst_buf_size;
-    dst_samplerate = src_samplerate;
     status = switch_core_codec_decode(js_codec->codec, NULL, src_buf, src_len, src_samplerate, dst_buf, &dst_len, &dst_samplerate, &flags);
     if(status != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't encode buffer (err:%d)\n", status);
@@ -197,8 +203,8 @@ static const JSCFunctionListEntry js_codec_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("canDecode", js_codec_property_get, js_codec_property_set, PROP_CAN_DECODE),
     //
     JS_CFUNC_DEF("ready", 0, js_codec_ready),
-    JS_CFUNC_DEF("encode", 4, js_codec_encode),
-    JS_CFUNC_DEF("decode", 4, js_codec_decode),
+    JS_CFUNC_DEF("encode", 5, js_codec_encode),
+    JS_CFUNC_DEF("decode", 5, js_codec_decode),
 };
 
 static void js_codec_finalizer(JSRuntime *rt, JSValue val) {

@@ -930,6 +930,22 @@ static JSValue js_session_get_write_codec(JSContext *ctx, JSValueConst this_val,
     return js_codec_from_session_wcodec(ctx, jss->session);
 }
 
+static JSValue js_session_frame_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+
+    SESSION_SANITY_CHECK();
+
+    return JS_ThrowTypeError(ctx, "Not yet implemented");
+}
+
+static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+
+    SESSION_SANITY_CHECK();
+
+    return JS_ThrowTypeError(ctx, "Not yet implemented");
+}
+
 static JSValue js_session_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
 
@@ -1107,11 +1123,11 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("hangup", 0, js_session_hangup),
     JS_CFUNC_DEF("execute", 0, js_session_execute),
     JS_CFUNC_DEF("sleep", 1, js_session_sleep),
-    JS_CFUNC_DEF("genTones", 1, js_session_gen_tones),              // instead of Teletone
+    JS_CFUNC_DEF("genTones", 1, js_session_gen_tones),
     JS_CFUNC_DEF("getReadCodec", 0, js_session_get_read_codec),
     JS_CFUNC_DEF("getWriteCodec", 0, js_session_get_write_codec),
-    //JS_CFUNC_DEF("frameRead", 2, js_session_frame_read),
-    //JS_CFUNC_DEF("frameWrite", 2, js_session_frame_write),
+    JS_CFUNC_DEF("frameRead", 2, js_session_frame_read),
+    JS_CFUNC_DEF("frameWrite", 2, js_session_frame_write),
     JS_CFUNC_DEF("destroy", 0, js_session_destroy),
 };
 
