@@ -451,6 +451,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     js_fileio_class_register(ctx, global_obj);
     js_file_class_register(ctx, global_obj);
     js_socket_class_register(ctx, global_obj);
+    js_coredb_class_register(ctx, global_obj);
 
     /* script arguments */
     if(!zstr(script_instance->args)) {
@@ -713,7 +714,7 @@ static void event_handler_shutdown(switch_event_t *event) {
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
     "run scriptName [args] - launch a new script instance\n" \
-    "int scriptName [id]   - interrrupt script/instance\n"
+    "int scriptName        - interrrupt script\n"
 
 SWITCH_STANDARD_API(quickjs_cmd) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;

@@ -143,6 +143,7 @@ typedef struct {
     uint8_t                 opened;
     uint8_t                 type;
     uint8_t                 nonblock;
+    uint8_t                 mcttl;
     switch_sockaddr_t       *toaddr;
     switch_sockaddr_t       *loaddr;
     switch_size_t           buffer_size;
@@ -152,5 +153,17 @@ typedef struct {
 } js_socket_t;
 JSClassID js_socket_class_get_id();
 switch_status_t js_socket_class_register(JSContext *ctx, JSValue global_obj);
+
+// CoreDB
+typedef struct {
+    char                    *name;
+    switch_core_db_t        *db;
+    switch_core_db_stmt_t   *stmt;
+    switch_memory_pool_t    *pool;
+    JSContext               *ctx;
+    JSValue                 callback;
+} js_coredb_t;
+JSClassID js_coredb_class_get_id();
+switch_status_t js_coredb_class_register(JSContext *ctx, JSValue global_obj);
 
 #endif

@@ -668,7 +668,6 @@ static JSValue js_file_contructor(JSContext *ctx, JSValueConst new_target, int a
 
     return obj;
 fail:
-    JS_FreeCString(ctx, path);
     if(pool) {
         switch_core_destroy_memory_pool(&pool);
     }
@@ -676,6 +675,7 @@ fail:
         js_free(ctx, js_file);
     }
     JS_FreeValue(ctx, obj);
+    JS_FreeCString(ctx, path);
     return (JS_IsUndefined(err) ? JS_EXCEPTION : err);
 }
 

@@ -8,10 +8,13 @@
 
 #define CLASS_NAME          "Socket"
 #define PROP_TYPE           0
-#define PROP_NONBLOCK       1
+#define PROP_TIMEOUT        1
+#define PROP_NONBLOCK       2
+#define PROP_MCTTL          3
 
-#define S_TYPE_TCP  1
-#define S_TYPE_UDP  2
+#define S_TYPE_TCP          1
+#define S_TYPE_UDP          2
+#define S_TYPE_MULTICAST    3
 
 #define SOCKET_SANITY_CHECK() if (!js_socket || !js_socket->socket) { \
            return JS_ThrowTypeError(ctx, "Socket is not initialized"); \
@@ -37,10 +40,21 @@ static JSValue js_socket_property_get(JSContext *ctx, JSValueConst this_val, int
             if(js_socket->type == S_TYPE_TCP) {
                 return JS_NewString(ctx, "tcp");
             }
+            if(js_socket->type == S_TYPE_MULTICAST) {
+                return JS_NewString(ctx, "multicast");
+            }
             break;
+        }
+        case PROP_TIMEOUT: {
+            switch_interval_time_t to;
+            switch_socket_timeout_get(js_socket->socket, &to);
+            return JS_NewInt32(ctx, to);
         }
         case PROP_NONBLOCK: {
             return (js_socket->nonblock ? JS_TRUE : JS_FALSE);
+        }
+        case PROP_MCTTL: {
+            return JS_NewInt32(ctx, js_socket->mcttl);
         }
     }
 
@@ -50,30 +64,33 @@ static JSValue js_socket_property_get(JSContext *ctx, JSValueConst this_val, int
 static JSValue js_socket_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
 
+    if(!js_socket || js_socket->socket) {
+        return JS_UNDEFINED;
+    }
+
+    switch(magic) {
+        case PROP_TIMEOUT: {
+            uint32_t to = 0;
+            JS_ToUint32(ctx, &to, val);
+            switch_socket_timeout_set(js_socket->socket, to);
+            return JS_TRUE;
+        }
+        case PROP_NONBLOCK: {
+            int bval = JS_ToBool(ctx, val);
+            if(switch_socket_opt_set(js_socket->socket, SWITCH_SO_NONBLOCK, bval) == SWITCH_STATUS_SUCCESS) {
+                js_socket->nonblock = bval;
+            }
+            return (js_socket->nonblock ? JS_TRUE : JS_FALSE);
+        }
+        case PROP_MCTTL: {
+            uint32_t ttl = 0;
+            JS_ToUint32(ctx, &ttl, val);
+            js_socket->mcttl = ttl;
+            return JS_TRUE;
+        }
+    }
+
     return JS_FALSE;
-}
-
-static JSValue js_socket_set_nonblock(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
-    switch_status_t status;
-    int val = 0;
-
-    SOCKET_SANITY_CHECK();
-
-    if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
-    }
-
-    if(!js_socket->opened) {
-        return JS_FALSE;
-    }
-
-    val = JS_ToBool(ctx, argv[0]);
-    if((status = switch_socket_opt_set(js_socket->socket, SWITCH_SO_NONBLOCK, val)) == SWITCH_STATUS_SUCCESS) {
-        js_socket->nonblock = val;
-    }
-
-    return (status == SWITCH_STATUS_SUCCESS ? JS_TRUE : JS_FALSE);
 }
 
 static JSValue js_socket_connect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -101,7 +118,34 @@ static JSValue js_socket_connect(JSContext *ctx, JSValueConst this_val, int argc
 
     host = JS_ToCString(ctx, argv[0]);
     if(zstr(host)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: host");
+        if(js_socket->type == S_TYPE_MULTICAST) {
+            return JS_ThrowTypeError(ctx, "Invalid argument: multicastGroup");
+        } else {
+            return JS_ThrowTypeError(ctx, "Invalid argument: host");
+        }
+    }
+
+    if(js_socket->type == S_TYPE_MULTICAST) {
+        if((status = switch_sockaddr_info_get(&js_socket->toaddr, host, SWITCH_UNSPEC, port, 0, js_socket->pool)) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_sockaddr_info_get failed (err: %d)\n", status);
+            goto out;
+        }
+        if((status = switch_mcast_interface(js_socket->socket, js_socket->loaddr)) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_mcast_interface failed (err: %d)\n", status);
+            goto out;
+        }
+        if((status = switch_mcast_join(js_socket->socket, js_socket->toaddr, NULL, NULL)) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_mcast_join failed (err: %d)\n", status);
+            goto out;
+        }
+        if((status = switch_mcast_hops(js_socket->socket, js_socket->mcttl)) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_mcast_hops failed (err: %d)\n", status);
+            goto out;
+        }
+
+        success = 1;
+        js_socket->opened = SWITCH_TRUE;
+        goto out;
     }
 
     if(js_socket->type == S_TYPE_UDP) {
@@ -337,8 +381,9 @@ static JSClassDef js_socket_class = {
 static const JSCFunctionListEntry js_socket_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("type", js_socket_property_get, js_socket_property_set, PROP_TYPE),
     JS_CGETSET_MAGIC_DEF("nonblock", js_socket_property_get, js_socket_property_set, PROP_NONBLOCK),
+    JS_CGETSET_MAGIC_DEF("timeout", js_socket_property_get, js_socket_property_set, PROP_TIMEOUT),
+    JS_CGETSET_MAGIC_DEF("multicastTTL", js_socket_property_get, js_socket_property_set, PROP_MCTTL),
     //
-    JS_CFUNC_DEF("nonblock", 1, js_socket_set_nonblock),
     JS_CFUNC_DEF("connect", 1, js_socket_connect),
     JS_CFUNC_DEF("close", 1, js_socket_close),
     JS_CFUNC_DEF("write", 2, js_socket_write),
@@ -378,6 +423,7 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
     switch_memory_pool_t *pool = NULL;
     switch_sockaddr_t *loaddr = NULL;
     const char *lo_addr_str = NULL;
+    const char *mc_addr_str = NULL;
     int type = S_TYPE_TCP;
 
     if(argc > 0) {
@@ -403,7 +449,7 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
         goto fail;
     }
 
-    if(type == S_TYPE_UDP) {
+    if(type == S_TYPE_UDP || type == S_TYPE_MULTICAST) {
         if(argc > 1) {
             lo_addr_str = JS_ToCString(ctx, argv[1]);
             if(!zstr(lo_addr_str)) {
@@ -443,6 +489,7 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
         }
     }
 
+    js_socket->mcttl = 1;
     js_socket->pool = pool;
     js_socket->type = type;
     js_socket->loaddr = loaddr;
@@ -456,6 +503,8 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
     if(JS_IsException(obj)) { goto fail; }
 
     JS_SetOpaque(obj, js_socket);
+    JS_FreeCString(ctx, lo_addr_str);
+    JS_FreeCString(ctx, mc_addr_str);
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-socket-constructor: js_socket=%p, socket=%p\n", js_socket, js_socket->socket);
 
@@ -475,6 +524,7 @@ fail:
         js_free(ctx, js_socket);
     }
     JS_FreeValue(ctx, obj);
+    JS_FreeCString(ctx, mc_addr_str);
     JS_FreeCString(ctx, lo_addr_str);
     return (JS_IsUndefined(err) ? JS_EXCEPTION : err);
 }
