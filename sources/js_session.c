@@ -661,66 +661,6 @@ static JSValue js_session_is_media_ready(JSContext *ctx, JSValueConst this_val, 
     return (switch_channel_media_ready(switch_core_session_get_channel(jss->session)) ? JS_TRUE : JS_FALSE);
 }
 
-static JSValue js_session_wait_for_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-    switch_channel_t *channel = NULL;
-    switch_time_t started;
-    unsigned int elapsed;
-    uint32_t timeout = 60000;
-    JSValue result;
-
-    SESSION_SANITY_CHECK();
-    channel = switch_core_session_get_channel(jss->session);
-    started = switch_micro_time_now();
-
-    if(argc > 0) {
-        JS_ToUint32(ctx, &timeout, argv[0]);
-        if(timeout < 1000) { timeout = 1000; }
-    }
-
-    while(SWITCH_TRUE) {
-        if(((elapsed = (unsigned int) ((switch_micro_time_now() - started) / 1000)) > (switch_time_t) timeout) || switch_channel_down(channel)) {
-            result = JS_FALSE;
-            break;
-        }
-        if(switch_channel_ready(channel) && switch_channel_test_flag(channel, CF_ANSWERED)) {
-            result = JS_TRUE;
-            break;
-        }
-        switch_cond_next();
-    }
-
-    return result;
-}
-
-static JSValue js_session_wait_for_media(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-    switch_channel_t *channel = NULL;
-    switch_time_t started;
-    unsigned int elapsed;
-    uint32_t timeout = 60000;
-    JSValue result;
-
-    SESSION_SANITY_CHECK();
-    channel = switch_core_session_get_channel(jss->session);
-    CHANNEL_MEDIA_SANITY_CHECK();
-
-    started = switch_micro_time_now();
-    while(SWITCH_TRUE) {
-        if(((elapsed = (unsigned int) ((switch_micro_time_now() - started) / 1000)) > (switch_time_t) timeout) || switch_channel_down(channel)) {
-            result = JS_FALSE;
-            break;
-        }
-        if(switch_channel_ready(channel) && (switch_channel_test_flag(channel, CF_ANSWERED) || switch_channel_test_flag(channel, CF_EARLY_MEDIA))) {
-            result = JS_TRUE;
-            break;
-        }
-        switch_cond_next();
-    }
-
-    return result;
-}
-
 static JSValue js_session_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_event_t *event = NULL;
@@ -1116,8 +1056,6 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("ready", 0, js_session_is_ready),
     JS_CFUNC_DEF("answered", 0, js_session_is_answered),
     JS_CFUNC_DEF("mediaReady", 0, js_session_is_media_ready),
-    JS_CFUNC_DEF("waitForAnswer", 0, js_session_wait_for_answer),   // deprecated
-    JS_CFUNC_DEF("waitForMedia", 0, js_session_wait_for_media),     // deprecated
     JS_CFUNC_DEF("getEvent", 0, js_session_get_event),
     JS_CFUNC_DEF("sendEvent", 0, js_session_send_event),
     JS_CFUNC_DEF("hangup", 0, js_session_hangup),

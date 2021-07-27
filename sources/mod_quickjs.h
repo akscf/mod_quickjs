@@ -7,6 +7,7 @@
 
 #include <switch.h>
 #include <switch_stun.h>
+#include <switch_curl.h>
 #include <quickjs.h>
 #include <quickjs-libc.h>
 
@@ -165,5 +166,31 @@ typedef struct {
 } js_coredb_t;
 JSClassID js_coredb_class_get_id();
 switch_status_t js_coredb_class_register(JSContext *ctx, JSValue global_obj);
+
+// EventHandler
+typedef struct {
+    uint8_t                 event_list[SWITCH_EVENT_ALL + 1];
+    switch_memory_pool_t    *pool;
+    switch_mutex_t          *mutex;
+    switch_hash_t           *custom_events;
+    switch_queue_t          *event_queue;
+    switch_event_t          *filters;
+} js_eventhandler_t;
+JSClassID js_eventhandler_class_get_id();
+switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_obj);
+
+typedef struct {
+    uint32_t                timeout;
+    char                    *url;
+    char                    *method;
+    char                    *credentials;
+    char                    *content_type;
+    switch_memory_pool_t    *pool;
+    JSContext               *ctx;
+    JSValue                 callback;
+} js_curl_t;
+JSClassID js_curl_class_get_id();
+switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj);
+
 
 #endif

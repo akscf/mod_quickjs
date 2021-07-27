@@ -20,7 +20,6 @@ static JSClassID js_coredb_class_id;
 static void js_coredb_finalizer(JSRuntime *rt, JSValue val);
 static int db_callback(void *udata, int argc, char **argv, char **columnNames);
 
-
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_coredb_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);

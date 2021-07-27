@@ -293,6 +293,10 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     return js_session_ext_bridge(ctx, this_val, argc, argv);
 }
 
+static JSValue js_global_set_interrupt_handler(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    return JS_FALSE;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 static uint32_t name2id(char *name, uint32_t len) {
     return switch_crc32_8bytes((char *)name, len);
@@ -433,14 +437,17 @@ out:
 static switch_status_t script_configure_ctx(script_t *script, script_instance_t *script_instance) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     JSContext *ctx = script_instance->ctx;
-    JSValue global_obj, session_obj, argc_obj, argv_obj;
+    JSValue global_obj, script_obj, argc_obj, argv_obj;
 
     /* init */
     JS_SetContextOpaque(ctx, script_instance);
-
     global_obj = JS_GetGlobalObject(ctx);
-    JS_SetPropertyStr(ctx, global_obj, "script_name", JS_NewString(ctx, script->name));
-    JS_SetPropertyStr(ctx, global_obj, "script_instance", JS_NewInt32(ctx, script_instance->id));
+
+    /* script obj */
+    script_obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, script_obj, "name", JS_NewString(ctx, script->name));
+    JS_SetPropertyStr(ctx, script_obj, "instance_id", JS_NewInt32(ctx, script_instance->id));
+    JS_SetPropertyStr(ctx, global_obj, "script", script_obj);
 
     /* built-in classes */
     js_session_class_register(ctx, global_obj);
@@ -452,6 +459,8 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     js_file_class_register(ctx, global_obj);
     js_socket_class_register(ctx, global_obj);
     js_coredb_class_register(ctx, global_obj);
+    js_eventhandler_class_register(ctx, global_obj);
+    js_curl_class_register(ctx, global_obj);
 
     /* script arguments */
     if(!zstr(script_instance->args)) {
@@ -483,7 +492,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
-    //JS_SetPropertyStr(ctx, global_obj, "setInterruptHandler", JS_NewCFunction(ctx, js_global_get, "setInterruptHandler", 2));
+    JS_SetPropertyStr(ctx, global_obj, "setInterruptHandler", JS_NewCFunction(ctx, js_global_set_interrupt_handler, "setInterruptHandler", 1));
 
     JS_FreeValue(ctx, global_obj);
     return status;
