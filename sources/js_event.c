@@ -21,14 +21,13 @@ static void js_event_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_event_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
 
-    if(!js_event || !js_event->event) {
-        return JS_UNDEFINED;
+    if(magic == PROP_READY) {
+        uint8_t x = (js_event && js_event->event);
+        return (x ? JS_TRUE : JS_FALSE);
     }
 
-    switch(magic) {
-        case PROP_READY: {
-            return JS_TRUE;
-        }
+    if(!js_event || !js_event->event) {
+        return JS_UNDEFINED;
     }
 
     return JS_UNDEFINED;

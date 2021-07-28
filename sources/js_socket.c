@@ -216,7 +216,7 @@ static JSValue js_socket_write(JSContext *ctx, JSValueConst this_val, int argc, 
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
     if(!buf) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: arrayBuffer");
+        return JS_ThrowTypeError(ctx, "Invalid argument: buffer");
     }
 
     JS_ToInt64(ctx, &len, argv[1]);
@@ -224,7 +224,7 @@ static JSValue js_socket_write(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_NewInt64(ctx, 0);
     }
     if(len > buf_size) {
-        return JS_ThrowRangeError(ctx, "Array buffer overflow (len > array size)");
+        return JS_ThrowRangeError(ctx, "Buffer overflow (len > array size)");
     }
 
     if(js_socket->type == S_TYPE_UDP) {
@@ -258,7 +258,7 @@ static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, J
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
     if(!buf) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: arrayBuffer");
+        return JS_ThrowTypeError(ctx, "Invalid argument: buffer");
     }
 
     JS_ToInt64(ctx, &len, argv[1]);
@@ -266,7 +266,7 @@ static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_NewInt64(ctx, 0);
     }
     if(len > buf_size) {
-        return JS_ThrowRangeError(ctx, "Array buffer overflow (len > array size)");
+        return JS_ThrowRangeError(ctx, "Buffer overflow (len > array size)");
     }
 
     if(switch_socket_recv(js_socket->socket, buf, &len) != SWITCH_STATUS_SUCCESS) {
@@ -382,7 +382,7 @@ static const JSCFunctionListEntry js_socket_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("type", js_socket_property_get, js_socket_property_set, PROP_TYPE),
     JS_CGETSET_MAGIC_DEF("nonblock", js_socket_property_get, js_socket_property_set, PROP_NONBLOCK),
     JS_CGETSET_MAGIC_DEF("timeout", js_socket_property_get, js_socket_property_set, PROP_TIMEOUT),
-    JS_CGETSET_MAGIC_DEF("multicastTTL", js_socket_property_get, js_socket_property_set, PROP_MCTTL),
+    JS_CGETSET_MAGIC_DEF("ttl", js_socket_property_get, js_socket_property_set, PROP_MCTTL),
     //
     JS_CFUNC_DEF("connect", 1, js_socket_connect),
     JS_CFUNC_DEF("close", 1, js_socket_close),

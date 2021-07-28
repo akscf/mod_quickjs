@@ -21,6 +21,9 @@
 #define PROP_SAMPLERATE             11
 #define PROP_CHANNELS               12
 #define PROP_PTIME                  13
+#define PROP_IS_READY               14
+#define PROP_IS_ANSWERED            15
+#define PROP_IS_MEDIA_READY         16
 
 #define SESSION_SANITY_CHECK() if (!jss || !jss->session) { \
            return JS_ThrowTypeError(ctx, "Session is not initialized"); \
@@ -75,6 +78,11 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
     switch_channel_t *channel = NULL;
     switch_caller_profile_t *caller_profile = NULL;
     switch_codec_implementation_t read_impl = { 0 };
+
+    if(magic == PROP_IS_READY) {
+        uint8_t x = (jss && jss->session && switch_channel_ready(switch_core_session_get_channel(jss->session)));
+        return(x ? JS_TRUE : JS_FALSE);
+    }
 
     SESSION_SANITY_CHECK();
 
@@ -135,6 +143,14 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
             const char *name = switch_channel_get_variable(channel, "write_codec");
             if(!zstr(name)) { JS_NewString(ctx, name); }
             return JS_UNDEFINED;
+        }
+
+        case PROP_IS_ANSWERED: {
+            return (switch_channel_test_flag(switch_core_session_get_channel(jss->session), CF_ANSWERED) ? JS_TRUE : JS_FALSE);
+        }
+
+        case PROP_IS_MEDIA_READY: {
+            return (switch_channel_media_ready(switch_core_session_get_channel(jss->session)) ? JS_TRUE : JS_FALSE);
         }
     }
     return JS_UNDEFINED;
@@ -306,6 +322,7 @@ static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int 
 static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
+    char *file_obj_fname = NULL;
     const char *file_name = NULL;
     const char *prebuf = NULL;
     char posbuf[64] = "";
@@ -322,8 +339,15 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
     CHANNEL_MEDIA_SANITY_CHECK();
 
     if(argc > 0) {
-        file_name = JS_ToCString(ctx, argv[0]);
-        if(zstr(file_name)) { return JS_FALSE; }
+        js_file_t *js_file = JS_GetOpaque(argv[0], js_file_class_get_id());
+        if(js_file) {
+            file_obj_fname = strdup(js_file->path);
+        } else {
+            file_name = JS_ToCString(ctx, argv[0]);
+            if(zstr(file_name)) {
+                return JS_FALSE;
+            }
+        }
     }
     if(argc > 1) {
         if(JS_IsFunction(ctx, argv[1])) {
@@ -353,10 +377,11 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
     args.buf = bp;
     args.buflen = len;
 
-    switch_ivr_play_file(jss->session, &fh, file_name, &args);
+    switch_ivr_play_file(jss->session, &fh, (file_name ? file_name : file_obj_fname), &args);
 
     JS_FreeValue(ctx, cb_state.fh_obj);
     JS_FreeCString(ctx, file_name);
+    switch_safe_free(file_obj_fname);
 
     switch_snprintf(posbuf, sizeof(posbuf), "%u", fh.offset_pos);
     switch_channel_set_variable(channel, "last_file_position", posbuf);
@@ -367,6 +392,7 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
 static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
     switch_channel_t *channel = NULL;
+    char *file_obj_fname = NULL;
     const char *file_name = NULL;
     input_callback_state_t cb_state = { 0 };
     switch_file_handle_t fh = { 0 };
@@ -375,15 +401,21 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
     uint32_t limit = 0, len = 0;
     void *bp = NULL;
 
-
     SESSION_SANITY_CHECK();
     channel = switch_core_session_get_channel(jss->session);
     CHANNEL_SANITY_CHECK();
     CHANNEL_MEDIA_SANITY_CHECK();
 
     if(argc > 0) {
-        file_name = JS_ToCString(ctx, argv[0]);
-        if(zstr(file_name)) { return JS_FALSE; }
+        js_file_t *js_file = JS_GetOpaque(argv[0], js_file_class_get_id());
+        if(js_file) {
+            file_obj_fname = strdup(js_file->path);
+        } else {
+            file_name = JS_ToCString(ctx, argv[0]);
+            if(zstr(file_name)) {
+                return JS_FALSE;
+            }
+        }
     }
     if(argc > 1) {
         if(JS_IsFunction(ctx, argv[1])) {
@@ -416,10 +448,11 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
     args.buf = bp;
     args.buflen = len;
 
-    switch_ivr_record_file(jss->session, &fh, file_name, &args, limit);
+    switch_ivr_record_file(jss->session, &fh, (file_name ? file_name : file_obj_fname), &args, limit);
 
     JS_FreeValue(ctx, cb_state.fh_obj);
     JS_FreeCString(ctx, file_name);
+    switch_safe_free(file_obj_fname);
 
     return JS_TRUE;
 }
@@ -629,16 +662,6 @@ static JSValue js_session_generate_xml_cdr(JSContext *ctx, JSValueConst this_val
     }
 
     return result;
-}
-
-static JSValue js_session_is_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
-
-    if(!jss || !jss->session) {
-        return JS_FALSE;
-    }
-
-    return (switch_channel_ready(switch_core_session_get_channel(jss->session)) ? JS_TRUE : JS_FALSE);
 }
 
 static JSValue js_session_is_answered(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -872,18 +895,92 @@ static JSValue js_session_get_write_codec(JSContext *ctx, JSValueConst this_val,
 
 static JSValue js_session_frame_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_status_t status;
+    switch_frame_t *read_frame = NULL;
+    switch_size_t buf_size = 0;
+    switch_size_t len = 0;
+    uint8_t *buf = NULL;
 
     SESSION_SANITY_CHECK();
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    if(argc < 1)  {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
+    if(!buf) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: buffer");
+    }
+
+    status = switch_core_session_read_frame(jss->session, &read_frame, SWITCH_IO_FLAG_NONE, 0);
+    if(SWITCH_READ_ACCEPTABLE(status) && read_frame->samples > 0 && !switch_test_flag(read_frame, SFF_CNG)) {
+        len = (read_frame->datalen > buf_size ? buf_size : read_frame->datalen);
+        memcpy(buf, read_frame->data, len);
+    }
+
+    return JS_NewInt64(ctx, len);
 }
 
 static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    switch_codec_t *wcodec = NULL;
+    switch_frame_t write_frame = { 0 };
+    switch_status_t status;
+    switch_size_t buf_size = 0;
+    switch_size_t len = 0;
+    uint8_t *buf = NULL;
 
     SESSION_SANITY_CHECK();
 
-    return JS_ThrowTypeError(ctx, "Not yet implemented");
+    if(argc < 2)  {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
+    if(!buf) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: buffer");
+    }
+
+    JS_ToInt64(ctx, &len, argv[1]);
+    if(len <= 0) {
+        return JS_NewInt64(ctx, 0);
+    }
+    if(len > buf_size) {
+        return JS_ThrowRangeError(ctx, "Buffer overflow (len > array size)");
+    }
+
+    if(argc > 2) {
+        js_codec_t *js_codec = JS_GetOpaque(argv[2], js_codec_class_get_id());
+        if(js_codec) {
+            wcodec = js_codec->codec;
+        }
+        if(!wcodec) {
+            wcodec = switch_core_session_get_write_codec(jss->session);
+        }
+    }
+    if(!wcodec) {
+        return JS_ThrowRangeError(ctx, "No suitable codec");
+    }
+
+    if(!jss->frame_buffer) {
+        jss->frame_buffer_size = SWITCH_RECOMMENDED_BUFFER_SIZE;
+        jss->frame_buffer = switch_core_session_alloc(jss->session, jss->frame_buffer_size);
+    }
+    if(len > jss->frame_buffer_size) {
+        jss->frame_buffer_size = len;
+        jss->frame_buffer = switch_core_session_alloc(jss->session, jss->frame_buffer_size);
+    }
+
+    memcpy(jss->frame_buffer, buf, len);
+
+    write_frame.codec = wcodec;
+    write_frame.buflen = len;
+    write_frame.samples = len / 2;
+    write_frame.datalen = write_frame.samples;
+
+    switch_core_session_write_frame(jss->session, &write_frame, SWITCH_IO_FLAG_NONE, 0);
+
+    return JS_NewInt64(ctx, len);
 }
 
 static JSValue js_session_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -1037,6 +1134,9 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("samplerate", js_session_property_get, js_session_property_set, PROP_SAMPLERATE),
     JS_CGETSET_MAGIC_DEF("channels", js_session_property_get, js_session_property_set, PROP_CHANNELS),
     JS_CGETSET_MAGIC_DEF("ptime", js_session_property_get, js_session_property_set, PROP_PTIME),
+    JS_CGETSET_MAGIC_DEF("ready", js_session_property_get, js_session_property_set, PROP_IS_READY),
+    JS_CGETSET_MAGIC_DEF("isAnswered", js_session_property_get, js_session_property_set, PROP_IS_ANSWERED),
+    JS_CGETSET_MAGIC_DEF("isMediaReady", js_session_property_get, js_session_property_set, PROP_IS_MEDIA_READY),
     //
     JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),
     JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),
@@ -1053,9 +1153,6 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("answer", 0, js_session_answer),
     JS_CFUNC_DEF("preAnswer", 0, js_session_pre_answer),
     JS_CFUNC_DEF("generateXmlCdr", 0, js_session_generate_xml_cdr),
-    JS_CFUNC_DEF("ready", 0, js_session_is_ready),
-    JS_CFUNC_DEF("answered", 0, js_session_is_answered),
-    JS_CFUNC_DEF("mediaReady", 0, js_session_is_media_ready),
     JS_CFUNC_DEF("getEvent", 0, js_session_get_event),
     JS_CFUNC_DEF("sendEvent", 0, js_session_send_event),
     JS_CFUNC_DEF("hangup", 0, js_session_hangup),
@@ -1064,8 +1161,11 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("genTones", 1, js_session_gen_tones),
     JS_CFUNC_DEF("getReadCodec", 0, js_session_get_read_codec),
     JS_CFUNC_DEF("getWriteCodec", 0, js_session_get_write_codec),
-    JS_CFUNC_DEF("frameRead", 2, js_session_frame_read),
-    JS_CFUNC_DEF("frameWrite", 2, js_session_frame_write),
+    JS_CFUNC_DEF("frameRead", 1, js_session_frame_read),
+    JS_CFUNC_DEF("frameWrite", 1, js_session_frame_write),
+    // deprecated
+    JS_CFUNC_DEF("answered", 0, js_session_is_answered),
+    JS_CFUNC_DEF("mediaReady", 0, js_session_is_media_ready),
     JS_CFUNC_DEF("destroy", 0, js_session_destroy),
 };
 
@@ -1177,6 +1277,7 @@ switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj) {
     JS_SetClassProto(ctx, js_session_class_id, obj_proto);
 
     JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
+
     return SWITCH_STATUS_SUCCESS;
 }
 

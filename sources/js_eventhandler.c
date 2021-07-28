@@ -22,14 +22,13 @@ static void js_eventhandler_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_eventhandler_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
 
-    if(!js_eventhandler) {
-        return JS_UNDEFINED;
+    if(magic == PROP_READY) {
+        uint8_t x = (js_eventhandler && js_eventhandler->event_queue);
+        return (x ? JS_TRUE : JS_FALSE);
     }
 
-    switch(magic) {
-        case PROP_READY: {
-            return (js_eventhandler->event_queue ? JS_TRUE : JS_FALSE);
-        }
+    if(!js_eventhandler) {
+        return JS_UNDEFINED;
     }
 
     return JS_UNDEFINED;

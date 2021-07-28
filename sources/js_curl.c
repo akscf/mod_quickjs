@@ -6,6 +6,7 @@
  **/
 
 #include "mod_quickjs.h"
+#ifdef JS_CURL_ENABLE
 
 #define CLASS_NAME          "CURL"
 #define PROP_READY          0
@@ -27,14 +28,16 @@ static size_t file_callback(void *ptr, size_t size, size_t nmemb, void *data);
 static JSValue js_curl_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_class_id);
 
+    if(magic == PROP_READY) {
+        uint8_t x = (js_curl != NULL);
+        return (x ? JS_TRUE : JS_FALSE);
+    }
+
     if(!js_curl) {
         return JS_UNDEFINED;
     }
 
     switch(magic) {
-        case PROP_READY: {
-            return JS_TRUE;
-        }
         case PROP_URL: {
             return JS_NewString(ctx, js_curl->url);
         }
@@ -375,3 +378,5 @@ switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj) {
 
     return SWITCH_STATUS_SUCCESS;
 }
+
+#endif // JS_CURL_ENABLE

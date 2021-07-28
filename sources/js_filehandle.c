@@ -210,7 +210,7 @@ static JSValue js_fh_read(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
     if(!buf) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: arrayBuffer");
+        return JS_ThrowTypeError(ctx, "Invalid argument: buffer");
     }
 
     JS_ToInt64(ctx, &len, argv[1]);
@@ -218,7 +218,7 @@ static JSValue js_fh_read(JSContext *ctx, JSValueConst this_val, int argc, JSVal
         return JS_NewInt64(ctx, 0);
     }
     if(len > buf_size) {
-        return JS_ThrowRangeError(ctx, "Array buffer overflow (len > array size)");
+        return JS_ThrowRangeError(ctx, "Buffer overflow (len > array size)");
     }
 
     if(switch_core_file_read(js_fh->fh, buf, &len) != SWITCH_STATUS_SUCCESS) {
@@ -245,7 +245,7 @@ static JSValue js_fh_write(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
     if(!buf) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: arrayBuffer");
+        return JS_ThrowTypeError(ctx, "Invalid argument: buffer");
     }
 
     JS_ToInt64(ctx, &len, argv[1]);
@@ -253,7 +253,7 @@ static JSValue js_fh_write(JSContext *ctx, JSValueConst this_val, int argc, JSVa
         return JS_NewInt64(ctx, 0);
     }
     if(len > buf_size) {
-        return JS_ThrowRangeError(ctx, "Array buffer overflow (len > array size)");
+        return JS_ThrowRangeError(ctx, "Buffer overflow (len > array size)");
     }
 
     if(switch_core_file_write(js_fh->fh, buf, &len) != SWITCH_STATUS_SUCCESS) {

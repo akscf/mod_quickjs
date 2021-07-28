@@ -23,6 +23,7 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
 
 static script_t *script_lookup(char *name);
 static uint32_t script_sem_take(script_t *script);
+static script_instance_t *instance_lookup(script_t *script, uint32_t id);
 static void script_sem_release(script_t *script);
 static uint32_t script_instance_sem_take(script_instance_t *instance);
 static void script_instance_sem_release(script_instance_t *instance);
@@ -101,6 +102,9 @@ static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     }
 
     script_instance = JS_GetContextOpaque(ctx);
+    if(!script_instance) {
+        return JS_ThrowTypeError(ctx, "Invalid runtime");
+    }
     script = (script_t *)(script_instance ? script_instance->script : NULL);
 
     path = JS_ToCString(ctx, argv[0]);
@@ -276,6 +280,10 @@ static JSValue js_api_execute(JSContext *ctx, JSValueConst this_val, int argc, J
     }
 
     script_instance = JS_GetContextOpaque(ctx);
+    if(!script_instance) {
+        return JS_ThrowTypeError(ctx, "Invalid runtime");
+    }
+
     session = (script_instance ? script_instance->session : NULL);
 
     SWITCH_STANDARD_STREAM(stream);
@@ -294,6 +302,27 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
 }
 
 static JSValue js_global_set_interrupt_handler(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_instance_t *script_instance = NULL;
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    script_instance = JS_GetContextOpaque(ctx);
+    if(!script_instance) {
+        return JS_ThrowTypeError(ctx, "Invalid runtime");
+    }
+
+    if(JS_IsNull(argv[0])) {
+        script_instance->int_handler = JS_UNDEFINED;
+        return JS_TRUE;
+    }
+
+    if(JS_IsFunction(ctx, argv[0])) {
+        script_instance->int_handler = argv[0];
+        return JS_TRUE;
+    }
+
     return JS_FALSE;
 }
 
@@ -443,26 +472,28 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     JS_SetContextOpaque(ctx, script_instance);
     global_obj = JS_GetGlobalObject(ctx);
 
+    /* built-in classes */
+    js_session_class_register(ctx, global_obj);
+    //js_codec_class_register(ctx, global_obj);
+    //js_file_handle_class_register(ctx, global_obj);
+    //js_event_class_register(ctx, global_obj);
+    //js_dtmf_class_register(ctx, global_obj);
+    //js_fileio_class_register(ctx, global_obj);
+    //js_file_class_register(ctx, global_obj);
+    //js_socket_class_register(ctx, global_obj);
+    //js_coredb_class_register(ctx, global_obj);
+    //js_eventhandler_class_register(ctx, global_obj);
+#ifdef JS_CURL_ENABLE
+    //js_curl_class_register(ctx, global_obj);
+#endif // JS_CURL_ENABLE
+
     /* script obj */
     script_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, script_obj, "name", JS_NewString(ctx, script->name));
     JS_SetPropertyStr(ctx, script_obj, "instance_id", JS_NewInt32(ctx, script_instance->id));
     JS_SetPropertyStr(ctx, global_obj, "script", script_obj);
 
-    /* built-in classes */
-    js_session_class_register(ctx, global_obj);
-    js_codec_class_register(ctx, global_obj);
-    js_file_handle_class_register(ctx, global_obj);
-    js_event_class_register(ctx, global_obj);
-    js_dtmf_class_register(ctx, global_obj);
-    js_fileio_class_register(ctx, global_obj);
-    js_file_class_register(ctx, global_obj);
-    js_socket_class_register(ctx, global_obj);
-    js_coredb_class_register(ctx, global_obj);
-    js_eventhandler_class_register(ctx, global_obj);
-    js_curl_class_register(ctx, global_obj);
-
-    /* script arguments */
+    /* arguments */
     if(!zstr(script_instance->args)) {
         char *argv[512];
         int argc = 0;
@@ -494,6 +525,7 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "setInterruptHandler", JS_NewCFunction(ctx, js_global_set_interrupt_handler, "setInterruptHandler", 1));
 
+out:
     JS_FreeValue(ctx, global_obj);
     return status;
 }
@@ -561,6 +593,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
             status = SWITCH_STATUS_MEMERR;
             goto out;
         }
+
         script->id = id;
         script->pool = pool;
         script->path = switch_core_strdup(pool, script_path_local);
@@ -631,6 +664,7 @@ out:
 
 static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, void *obj) {
     volatile script_instance_t *_ref = (script_instance_t *) obj;
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
     script_instance_t *script_instance = (script_instance_t *) _ref;
     script_t *script = (script_t *)script_instance->script;
     char *script_buf_local = NULL, *script_tmp_buff = NULL;
@@ -642,14 +676,13 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
 
     switch_mutex_lock(globals.mutex_rt);
     script_instance->ctx = JS_NewContext(globals.qjs_rt);
+    if(script_instance->ctx) {
+        status = script_configure_ctx(script, script_instance);
+    }
     switch_mutex_unlock(globals.mutex_rt);
 
-    if(!script_instance->ctx) {
+    if(!script_instance->ctx || status != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create ctx\n");
-        goto out;
-    }
-    if(script_configure_ctx(script, script_instance) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't configure ctx\n");
         goto out;
     }
 
@@ -660,7 +693,7 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
 
         clen = (script->code_length + strlen(script_tmp_buff));
 
-        switch_zmalloc(script_buf_local, clen);
+        switch_zmalloc(script_buf_local, clen + 1);
         memcpy(script_buf_local, script_tmp_buff, strlen(script_tmp_buff));
         memcpy(script_buf_local + strlen(script_tmp_buff), script->code, script->code_length);
 
@@ -723,7 +756,7 @@ static void event_handler_shutdown(switch_event_t *event) {
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
     "run scriptName [args] - launch a new script instance\n" \
-    "int scriptName        - interrrupt script\n"
+    "int scriptName [id]   - interrrupt script\n"
 
 SWITCH_STANDARD_API(quickjs_cmd) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -784,11 +817,39 @@ SWITCH_STANDARD_API(quickjs_cmd) {
         goto out;
     }
     if(strcasecmp(argv[0], "int") == 0) {
+        script_t *script = NULL;
+        script_instance_t *script_instance = NULL;
+        switch_hash_index_t *hidx = NULL;
         char *sname = argc > 2 ? argv[1] : NULL;
         char *sid = argc > 3 ? argv[2] : NULL;
 
-        stream->write_function(stream, "-ERR: not yet implemented\n");
+        script = script_lookup(sname);
+        if(script_sem_take(script)) {
+            if(!zstr(sid)) {
+                script_instance = instance_lookup(script, strtol(sid, NULL, 16));
+                if(script_instance_sem_take(script_instance)) {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Interrupt %s/%x [1]\n", script->name, script_instance->id);
+                    //
+                    //
+                    script_instance_sem_release(script_instance);
+                }
+            } else {
+                for(hidx = switch_core_hash_first_iter(script->instances_map, hidx); hidx; hidx = switch_core_hash_next(&hidx)) {
+                    void *hval = NULL;
 
+                    switch_core_hash_this(hidx, NULL, NULL, &hval);
+                    script_instance = (script_instance_t *)hval;
+                    if(script_instance_sem_take(script_instance)) {
+                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Interrupt %s/%x [2]\n", script->name, script_instance->id);
+                        //
+                        //
+                        script_instance_sem_release(script_instance);
+                    }
+                }
+            }
+            script_sem_release(script);
+        }
+        stream->write_function(stream, "-ERR: not yet implemented\n");
         goto out;
     }
     goto out;

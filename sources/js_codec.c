@@ -6,13 +6,14 @@
  **/
 #include "mod_quickjs.h"
 
-#define CLASS_NAME          "Codec"
-#define PROP_NAME           0
-#define PROP_PTIME          1
-#define PROP_CHANNELS       2
-#define PROP_SAMPLERATE     3
-#define PROP_CAN_ENCODE     4
-#define PROP_CAN_DECODE     5
+#define CLASS_NAME              "Codec"
+#define PROP_READY              0
+#define PROP_NAME               1
+#define PROP_PTIME              2
+#define PROP_CHANNELS           3
+#define PROP_SAMPLERATE         4
+#define PROP_CAN_ENCODE         5
+#define PROP_CAN_DECODE         6
 
 #define CODEC_SANITY_CHECK() if (!js_codec || !js_codec->codec) { \
            return JS_ThrowTypeError(ctx, "Codec is not initialized"); \
@@ -23,9 +24,25 @@ static JSClassID js_codec_class_id;
 static void js_codec_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
 
+
+static JSValue js_codec_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_codec_t *js_codec = JS_GetOpaque2(ctx, this_val, js_codec_class_id);
+
+    if(!js_codec || !js_codec->codec) {
+        return JS_FALSE;
+    }
+
+    return (switch_core_codec_ready(js_codec->codec) ? JS_TRUE : JS_FALSE);
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_codec_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_codec_t *js_codec = JS_GetOpaque2(ctx, this_val, js_codec_class_id);
+
+    if(magic == PROP_READY) {
+        uint8_t x = (js_codec && js_codec->codec && switch_core_codec_ready(js_codec->codec));
+        return (x ? JS_TRUE : JS_FALSE);
+    }
 
     if(!js_codec) {
         return JS_UNDEFINED;
@@ -49,6 +66,7 @@ static JSValue js_codec_property_get(JSContext *ctx, JSValueConst this_val, int 
 
         case PROP_CAN_DECODE:
             return (js_codec->flags & SWITCH_CODEC_FLAG_DECODE) ? JS_TRUE : JS_FALSE;
+
     }
 
     return JS_UNDEFINED;
@@ -58,16 +76,6 @@ static JSValue js_codec_property_set(JSContext *ctx, JSValueConst this_val, JSVa
     js_codec_t *js_codec = JS_GetOpaque2(ctx, this_val, js_codec_class_id);
 
     return JS_FALSE;
-}
-
-static JSValue js_codec_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_codec_t *js_codec = JS_GetOpaque2(ctx, this_val, js_codec_class_id);
-
-    if(!js_codec || !js_codec->codec) {
-        return JS_FALSE;
-    }
-
-    return (switch_core_codec_ready(js_codec->codec) ? JS_TRUE : JS_FALSE);
 }
 
 static JSValue js_codec_encode(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -195,6 +203,7 @@ static JSClassDef js_codec_class = {
 };
 
 static const JSCFunctionListEntry js_codec_proto_funcs[] = {
+    JS_CGETSET_MAGIC_DEF("ready", js_codec_property_get, js_codec_property_set, PROP_READY),
     JS_CGETSET_MAGIC_DEF("name", js_codec_property_get, js_codec_property_set, PROP_NAME),
     JS_CGETSET_MAGIC_DEF("ptime", js_codec_property_get, js_codec_property_set, PROP_PTIME),
     JS_CGETSET_MAGIC_DEF("channels", js_codec_property_get, js_codec_property_set, PROP_CHANNELS),
@@ -202,7 +211,6 @@ static const JSCFunctionListEntry js_codec_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("canEncode", js_codec_property_get, js_codec_property_set, PROP_CAN_ENCODE),
     JS_CGETSET_MAGIC_DEF("canDecode", js_codec_property_get, js_codec_property_set, PROP_CAN_DECODE),
     //
-    JS_CFUNC_DEF("ready", 0, js_codec_ready),
     JS_CFUNC_DEF("encode", 5, js_codec_encode),
     JS_CFUNC_DEF("decode", 5, js_codec_decode),
 };

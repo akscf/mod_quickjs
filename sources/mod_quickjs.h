@@ -14,6 +14,9 @@
 #define MOD_VERSION "1.0"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
+#define JS_CURL_ENABLE 1
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
@@ -26,6 +29,7 @@ typedef struct {
     switch_mutex_t          *mutex;
     switch_core_session_t   *session;
     JSContext               *ctx;
+    JSValue                 int_handler;
 } script_instance_t;
 
 typedef struct {
@@ -53,6 +57,8 @@ typedef struct {
     switch_core_session_t   *session;
     JSValue                 on_hangup;
     JSContext               *ctx;
+    switch_byte_t           *frame_buffer;
+    uint32_t                 frame_buffer_size;
 } js_session_t;
 
 JSClassID js_seesion_class_get_id();
@@ -72,7 +78,7 @@ typedef struct {
     switch_codec_t          *codec;
     switch_codec_t          codec_base;
 } js_codec_t;
-JSClassID js_code_class_get_id();
+JSClassID js_codec_class_get_id();
 switch_status_t js_codec_class_register(JSContext *ctx, JSValue global_obj);
 JSValue js_codec_from_session_wcodec(JSContext *ctx, switch_core_session_t *session);
 JSValue js_codec_from_session_rcodec(JSContext *ctx, switch_core_session_t *session);
@@ -179,6 +185,7 @@ typedef struct {
 JSClassID js_eventhandler_class_get_id();
 switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_obj);
 
+#ifdef JS_CURL_ENABLE
 typedef struct {
     uint32_t                timeout;
     char                    *url;
@@ -191,6 +198,6 @@ typedef struct {
 } js_curl_t;
 JSClassID js_curl_class_get_id();
 switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj);
-
+#endif // JS_CURL_ENABLE
 
 #endif
