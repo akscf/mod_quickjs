@@ -279,6 +279,18 @@ static JSValue js_fh_close(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     return JS_TRUE;
 }
 
+static JSValue js_fh_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_file_handle_t *js_fh = JS_GetOpaque2(ctx, this_val, js_fh_class_id);
+
+    FH_SANITY_CHECK();
+
+    if(js_fh->fh) {
+        switch_set_flag(js_fh->fh, SWITCH_FILE_DONE);
+    }
+
+    return JS_TRUE;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSClassDef js_fh_class = {
     FH_CLASS_NAME,
@@ -298,6 +310,7 @@ static const JSCFunctionListEntry js_fh_proto_funcs[] = {
     JS_CFUNC_DEF("read", 1, js_fh_read),
     JS_CFUNC_DEF("write", 1, js_fh_write),
     JS_CFUNC_DEF("close", 1, js_fh_close),
+    JS_CFUNC_DEF("stop", 1, js_fh_stop),
 };
 
 static void js_fh_finalizer(JSRuntime *rt, JSValue val) {

@@ -474,18 +474,18 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
 
     /* built-in classes */
     js_session_class_register(ctx, global_obj);
-    //js_codec_class_register(ctx, global_obj);
-    //js_file_handle_class_register(ctx, global_obj);
-    //js_event_class_register(ctx, global_obj);
-    //js_dtmf_class_register(ctx, global_obj);
-    //js_fileio_class_register(ctx, global_obj);
-    //js_file_class_register(ctx, global_obj);
-    //js_socket_class_register(ctx, global_obj);
-    //js_coredb_class_register(ctx, global_obj);
-    //js_eventhandler_class_register(ctx, global_obj);
+    js_codec_class_register(ctx, global_obj);
+    js_file_handle_class_register(ctx, global_obj);
+    js_event_class_register(ctx, global_obj);
+    js_dtmf_class_register(ctx, global_obj);
+    js_fileio_class_register(ctx, global_obj);
+    js_file_class_register(ctx, global_obj);
+    js_socket_class_register(ctx, global_obj);
+    js_coredb_class_register(ctx, global_obj);
+    js_eventhandler_class_register(ctx, global_obj);
 #ifdef JS_CURL_ENABLE
-    //js_curl_class_register(ctx, global_obj);
-#endif // JS_CURL_ENABLE
+    js_curl_class_register(ctx, global_obj);
+#endif
 
     /* script obj */
     script_obj = JS_NewObject(ctx);
