@@ -7,7 +7,7 @@
 #include "mod_quickjs.h"
 
 #define CLASS_NAME      "EventHandler"
-#define PROP_READY      1
+#define PROP_IS_READY   0
 
 #define MAX_QUEUE_LEN   100000
 
@@ -22,7 +22,7 @@ static void js_eventhandler_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_eventhandler_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
 
-    if(magic == PROP_READY) {
+    if(magic == PROP_IS_READY) {
         uint8_t x = (js_eventhandler && js_eventhandler->event_queue);
         return (x ? JS_TRUE : JS_FALSE);
     }
@@ -289,7 +289,7 @@ static JSClassDef js_eventhandler_class = {
 };
 
 static const JSCFunctionListEntry js_eventhandler_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("ready", js_eventhandler_property_get, js_eventhandler_property_set, PROP_READY),
+    JS_CGETSET_MAGIC_DEF("isReady", js_eventhandler_property_get, js_eventhandler_property_set, PROP_IS_READY),
     //
     JS_CFUNC_DEF("subscribe", 1, js_eventhandler_subscribe),
     JS_CFUNC_DEF("unsubscribe", 1, js_eventhandler_unsubscribe),

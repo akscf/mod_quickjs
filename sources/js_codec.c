@@ -7,7 +7,7 @@
 #include "mod_quickjs.h"
 
 #define CLASS_NAME              "Codec"
-#define PROP_READY              0
+#define PROP_IS_READY              0
 #define PROP_NAME               1
 #define PROP_PTIME              2
 #define PROP_CHANNELS           3
@@ -39,7 +39,7 @@ static JSValue js_codec_ready(JSContext *ctx, JSValueConst this_val, int argc, J
 static JSValue js_codec_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_codec_t *js_codec = JS_GetOpaque2(ctx, this_val, js_codec_class_id);
 
-    if(magic == PROP_READY) {
+    if(magic == PROP_IS_READY) {
         uint8_t x = (js_codec && js_codec->codec && switch_core_codec_ready(js_codec->codec));
         return (x ? JS_TRUE : JS_FALSE);
     }
@@ -203,7 +203,7 @@ static JSClassDef js_codec_class = {
 };
 
 static const JSCFunctionListEntry js_codec_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("ready", js_codec_property_get, js_codec_property_set, PROP_READY),
+    JS_CGETSET_MAGIC_DEF("isReady", js_codec_property_get, js_codec_property_set, PROP_IS_READY),
     JS_CGETSET_MAGIC_DEF("name", js_codec_property_get, js_codec_property_set, PROP_NAME),
     JS_CGETSET_MAGIC_DEF("ptime", js_codec_property_get, js_codec_property_set, PROP_PTIME),
     JS_CGETSET_MAGIC_DEF("channels", js_codec_property_get, js_codec_property_set, PROP_CHANNELS),

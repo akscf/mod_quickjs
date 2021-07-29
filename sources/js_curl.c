@@ -9,7 +9,7 @@
 #ifdef JS_CURL_ENABLE
 
 #define CLASS_NAME          "CURL"
-#define PROP_READY          0
+#define PROP_IS_READY       0
 #define PROP_URL            1
 #define PROP_METHOD         2
 #define PROP_TIMEOUT        3
@@ -28,7 +28,7 @@ static size_t file_callback(void *ptr, size_t size, size_t nmemb, void *data);
 static JSValue js_curl_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_class_id);
 
-    if(magic == PROP_READY) {
+    if(magic == PROP_IS_READY) {
         uint8_t x = (js_curl != NULL);
         return (x ? JS_TRUE : JS_FALSE);
     }
@@ -249,7 +249,7 @@ static JSClassDef js_curl_class = {
 };
 
 static const JSCFunctionListEntry js_curl_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("ready", js_curl_property_get, js_curl_property_set, PROP_READY),
+    JS_CGETSET_MAGIC_DEF("isReady", js_curl_property_get, js_curl_property_set, PROP_IS_READY),
     JS_CGETSET_MAGIC_DEF("url", js_curl_property_get, js_curl_property_set, PROP_URL),
     JS_CGETSET_MAGIC_DEF("method", js_curl_property_get, js_curl_property_set, PROP_METHOD),
     JS_CGETSET_MAGIC_DEF("timeout", js_curl_property_get, js_curl_property_set, PROP_TIMEOUT),

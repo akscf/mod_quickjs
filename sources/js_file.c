@@ -199,9 +199,11 @@ static JSValue js_file_exists(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_FALSE;
 }
 
+static const unsigned char padchar[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 static JSValue js_file_mktemp(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
     JSValue ret_val = JS_FALSE;
+    int i = 0, j = 0,  len = 0;
 
     FILE_SANITY_CHECK();
 
@@ -209,8 +211,20 @@ static JSValue js_file_mktemp(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_FALSE;
     }
 
+    len = strlen(js_file->path);
+    if(len > 0) {
+        for(i = 0 ; i < len; i++) {
+            // if(js_file->path[i] != 'X' && j > 0) { break; }
+            if(js_file->path[i] == 'X') {
+                uint32_t idx = (rand() % (sizeof(padchar) - 1));
+                js_file->path[i] = padchar[idx];
+                j++;
+            }
+        }
+    }
+
     js_file->flags = SWITCH_FOPEN_CREATE | SWITCH_FOPEN_WRITE | SWITCH_FOPEN_TRUNCATE | SWITCH_FOPEN_BINARY;
-    if(switch_file_mktemp(&js_file->fd, js_file->path, js_file->flags, js_file->pool) == SWITCH_STATUS_SUCCESS) {
+    if(switch_file_open(&js_file->fd, js_file->path, js_file->flags, SWITCH_FPROT_UREAD | SWITCH_FPROT_UWRITE, js_file->pool) == SWITCH_STATUS_SUCCESS) {
         js_file->is_open = SWITCH_TRUE;
         js_file->tmp_file = SWITCH_TRUE;
         ret_val = JS_TRUE;

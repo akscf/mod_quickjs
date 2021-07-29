@@ -1019,7 +1019,7 @@ static switch_status_t sys_session_hangup_hook(switch_core_session_t *session) {
 }
 
 static switch_status_t js_record_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
-    switch_status_t status;
+    switch_status_t status = SWITCH_STATUS_FALSE;
     input_callback_state_t *cb_state = buf;
     js_session_t *jss = cb_state->jss;
     JSContext *ctx = (jss ? jss->ctx : NULL);
@@ -1036,6 +1036,8 @@ static switch_status_t js_record_input_callback(switch_core_session_t *session, 
         if(JS_IsException(ret_val)) {
             ctx_dump_error(NULL, NULL, ctx);
             JS_ResetUncatchableError(ctx);
+        } else if(JS_IsBool(ret_val)) {
+            status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
         }
 
         JS_FreeValue(ctx, args[1]);
@@ -1043,11 +1045,11 @@ static switch_status_t js_record_input_callback(switch_core_session_t *session, 
         JS_FreeValue(ctx, ret_val);
     }
 
-    return SWITCH_STATUS_SUCCESS;
+    return status;
 }
 
 static switch_status_t js_playback_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
-    switch_status_t status;
+    switch_status_t status = SWITCH_STATUS_FALSE;
     input_callback_state_t *cb_state = buf;
     js_session_t *jss = cb_state->jss;
     JSContext *ctx = (jss ? jss->ctx : NULL);
@@ -1064,6 +1066,8 @@ static switch_status_t js_playback_input_callback(switch_core_session_t *session
         if(JS_IsException(ret_val)) {
             ctx_dump_error(NULL, NULL, ctx);
             JS_ResetUncatchableError(ctx);
+        } else if(JS_IsBool(ret_val)) {
+            status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
         }
 
         JS_FreeValue(ctx, args[1]);
@@ -1071,11 +1075,11 @@ static switch_status_t js_playback_input_callback(switch_core_session_t *session
         JS_FreeValue(ctx, ret_val);
     }
 
-    return SWITCH_STATUS_SUCCESS;
+    return status;
 }
 
 static switch_status_t js_collect_input_callback(switch_core_session_t *session, void *input, switch_input_type_t itype, void *buf, unsigned int buflen) {
-    switch_status_t status;
+    switch_status_t status = SWITCH_STATUS_FALSE;
     input_callback_state_t *cb_state = buf;
     js_session_t *jss = cb_state->jss;
     JSContext *ctx = (jss ? jss->ctx : NULL);
@@ -1101,6 +1105,8 @@ static switch_status_t js_collect_input_callback(switch_core_session_t *session,
         if(JS_IsException(ret_val)) {
             ctx_dump_error(NULL, NULL, ctx);
             JS_ResetUncatchableError(ctx);
+        } else if(JS_IsBool(ret_val)) {
+            status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
         }
 
         JS_FreeValue(ctx, args[1]);
@@ -1108,7 +1114,7 @@ static switch_status_t js_collect_input_callback(switch_core_session_t *session,
         JS_FreeValue(ctx, ret_val);
     }
 
-    return SWITCH_STATUS_SUCCESS;
+    return status;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1134,7 +1140,7 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("samplerate", js_session_property_get, js_session_property_set, PROP_SAMPLERATE),
     JS_CGETSET_MAGIC_DEF("channels", js_session_property_get, js_session_property_set, PROP_CHANNELS),
     JS_CGETSET_MAGIC_DEF("ptime", js_session_property_get, js_session_property_set, PROP_PTIME),
-    JS_CGETSET_MAGIC_DEF("ready", js_session_property_get, js_session_property_set, PROP_IS_READY),
+    JS_CGETSET_MAGIC_DEF("isReady", js_session_property_get, js_session_property_set, PROP_IS_READY),
     JS_CGETSET_MAGIC_DEF("isAnswered", js_session_property_get, js_session_property_set, PROP_IS_ANSWERED),
     JS_CGETSET_MAGIC_DEF("isMediaReady", js_session_property_get, js_session_property_set, PROP_IS_MEDIA_READY),
     //
