@@ -954,19 +954,19 @@ static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int
         if(js_codec) {
             wcodec = js_codec->codec;
         }
-        if(!wcodec) {
-            wcodec = switch_core_session_get_write_codec(jss->session);
-        }
     }
     if(!wcodec) {
-        return JS_ThrowRangeError(ctx, "No suitable codec");
+        wcodec = switch_core_session_get_write_codec(jss->session);
+        if(!wcodec) {
+            return JS_ThrowRangeError(ctx, "No suitable codec");
+        }
     }
 
     if(!jss->frame_buffer) {
         jss->frame_buffer_size = SWITCH_RECOMMENDED_BUFFER_SIZE;
         jss->frame_buffer = switch_core_session_alloc(jss->session, jss->frame_buffer_size);
     }
-    if(len > jss->frame_buffer_size) {
+    if(jss->frame_buffer_size < len) {
         jss->frame_buffer_size = len;
         jss->frame_buffer = switch_core_session_alloc(jss->session, jss->frame_buffer_size);
     }
@@ -974,9 +974,10 @@ static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int
     memcpy(jss->frame_buffer, buf, len);
 
     write_frame.codec = wcodec;
-    write_frame.buflen = len;
-    write_frame.samples = len / 2;
-    write_frame.datalen = write_frame.samples;
+    write_frame.buflen = buf_size;
+    write_frame.samples = len;
+    write_frame.datalen = len;
+    write_frame.data = jss->frame_buffer;
 
     switch_core_session_write_frame(jss->session, &write_frame, SWITCH_IO_FLAG_NONE, 0);
 
@@ -1131,10 +1132,8 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("causecode", js_session_property_get, js_session_property_set, PROP_CAUSECODE),
     JS_CGETSET_MAGIC_DEF("dialplan", js_session_property_get, js_session_property_set, PROP_PROFILE_DIALPLAN),
     JS_CGETSET_MAGIC_DEF("destination", js_session_property_get, js_session_property_set, PROP_PROFILE_DESTINATION),
-    JS_CGETSET_MAGIC_DEF("caller_id_name", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NAME),
-    JS_CGETSET_MAGIC_DEF("caller_id_number", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NUMBER),
-    JS_CGETSET_MAGIC_DEF("callerIDName", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NAME),
-    JS_CGETSET_MAGIC_DEF("callerIDNumber", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NUMBER),
+    JS_CGETSET_MAGIC_DEF("callerIdName", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NAME),
+    JS_CGETSET_MAGIC_DEF("callerIdNumber", js_session_property_get, js_session_property_set, PROP_CALLER_ID_NUMBER),
     JS_CGETSET_MAGIC_DEF("readCodecName", js_session_property_get, js_session_property_set, PROP_RCODEC_NAME),
     JS_CGETSET_MAGIC_DEF("writeCodecName", js_session_property_get, js_session_property_set, PROP_WCODEC_NAME),
     JS_CGETSET_MAGIC_DEF("samplerate", js_session_property_get, js_session_property_set, PROP_SAMPLERATE),
