@@ -374,7 +374,7 @@ static JSValue js_file_write_str(JSContext *ctx, JSValueConst this_val, int argc
     }
 
     str = JS_ToCString(ctx, argv[0]);
-    if(!zstr(str)) {
+    if(zstr(str)) {
         return JS_NewInt64(ctx, 0);
     }
 
@@ -596,7 +596,7 @@ static const JSCFunctionListEntry js_file_proto_funcs[] = {
     JS_CFUNC_DEF("close", 0, js_file_close),
     JS_CFUNC_DEF("read", 2, js_file_read),
     JS_CFUNC_DEF("write", 2, js_file_write),
-    JS_CFUNC_DEF("writeString", 2, js_file_write_str),
+    JS_CFUNC_DEF("writeString", 1, js_file_write_str),
     JS_CFUNC_DEF("readString", 1, js_file_read_str),
     JS_CFUNC_DEF("seek", 1, js_file_seek),
     JS_CFUNC_DEF("remove", 0, js_file_remove),
