@@ -1181,7 +1181,7 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-session-finalizer: jss=%p, session=%p\n", jss, jss->session);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-finalizer: jss=%p, session=%p\n", jss, jss->session);
 
     if(jss->session) {
         switch_channel_t *channel = switch_core_session_get_channel(jss->session);
@@ -1247,7 +1247,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     jss->ctx = ctx;
     JS_SetOpaque(obj, jss);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-session-constructor: jss=%p, session=%p\n", jss, jss->session);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-constructor: jss=%p, session=%p\n", jss, jss->session);
 
     return obj;
 fail:
@@ -1309,7 +1309,7 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
     jss->session = session;
     JS_SetOpaque(obj, jss);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-session-obj-created: jss=%p, session=%p\n", jss, jss->session);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-obj-created: jss=%p, session=%p\n", jss, jss->session);
 
     return obj;
 }

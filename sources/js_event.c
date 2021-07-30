@@ -199,7 +199,7 @@ static void js_event_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-event-finalizer: js_event=%p, event=%p\n", js_event, js_event->event);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-event-finalizer: js_event=%p, event=%p\n", js_event, js_event->event);
 
     if(js_event->event) {
         switch_event_destroy(&js_event->event);
@@ -263,7 +263,7 @@ static JSValue js_event_contructor(JSContext *ctx, JSValueConst new_target, int 
     js_event->event = event;
     JS_SetOpaque(obj, js_event);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-event-constructor: js-event=%p, event=%p\n", js_event, js_event->event);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-event-constructor: js-event=%p, event=%p\n", js_event, js_event->event);
 
     return obj;
 fail:
@@ -327,7 +327,7 @@ JSValue js_event_object_create(JSContext *ctx, switch_event_t *event) {
     js_event->event = event;
     JS_SetOpaque(obj, js_event);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-event-obj-created: js_event=%p\n", js_event);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-event-obj-created: js_event=%p\n", js_event);
 
     return obj;
 }

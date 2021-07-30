@@ -303,7 +303,7 @@ static void js_coredb_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-coredb-finalizer: js_coredb=%p, db=%p\n", js_coredb, js_coredb->db);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-coredb-finalizer: js_coredb=%p, db=%p\n", js_coredb, js_coredb->db);
 
     if(js_coredb->stmt) {
         switch_core_db_finalize(js_coredb->stmt);
@@ -371,7 +371,7 @@ static JSValue js_coredb_contructor(JSContext *ctx, JSValueConst new_target, int
     JS_SetOpaque(obj, js_coredb);
     JS_FreeCString(ctx, dbname);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-coredb-constructor: js-coredb=%p, db=%p\n", js_coredb, js_coredb->db);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-coredb-constructor: js-coredb=%p, db=%p\n", js_coredb, js_coredb->db);
 
     return obj;
 fail:

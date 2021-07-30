@@ -137,7 +137,7 @@ static void js_fileio_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fileio-finalizer: js_fileio=%p, fd=%p\n", js_fileio, js_fileio->fd);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-fileio-finalizer: js_fileio=%p, fd=%p\n", js_fileio, js_fileio->fd);
 
     if(js_fileio->fd) {
         switch_file_close(js_fileio->fd);
@@ -214,7 +214,7 @@ static JSValue js_fileio_contructor(JSContext *ctx, JSValueConst new_target, int
     JS_SetOpaque(obj, js_fileio);
     JS_FreeCString(ctx, path);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fileio-constructor: js-fileio=%p, fd=%p\n", js_fileio, js_fileio->fd);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-fileio-constructor: js-fileio=%p, fd=%p\n", js_fileio, js_fileio->fd);
 
     return obj;
 fail:

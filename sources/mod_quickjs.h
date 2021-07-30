@@ -188,13 +188,14 @@ switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_ob
 #ifdef JS_CURL_ENABLE
 typedef struct {
     uint32_t                timeout;
+    uint32_t                response_length;
+    uint8_t                 fl_ignore_rdata;
     char                    *url;
     char                    *method;
     char                    *credentials;
     char                    *content_type;
+    char                    *response_buffer;
     switch_memory_pool_t    *pool;
-    JSContext               *ctx;
-    JSValue                 callback;
 } js_curl_t;
 JSClassID js_curl_class_get_id();
 switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj);

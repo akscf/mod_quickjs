@@ -307,7 +307,7 @@ static void js_eventhandler_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-eventhandler-finalizer: js_eventhandler=%p\n", js_eventhandler);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-eventhandler-finalizer: js_eventhandler=%p\n", js_eventhandler);
 
     if(js_eventhandler->custom_events) {
         switch_core_hash_destroy(&js_eventhandler->custom_events);
@@ -372,7 +372,7 @@ static JSValue js_eventhandler_contructor(JSContext *ctx, JSValueConst new_targe
 
     JS_SetOpaque(obj, js_eventhandler);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-eventhandler-constructor: js_eventhandler=%p\n", js_eventhandler);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-eventhandler-constructor: js_eventhandler=%p\n", js_eventhandler);
 
     return obj;
 fail:

@@ -399,7 +399,7 @@ static void js_socket_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-socket-finalizer: js_socket=%p, socket=%p\n", js_socket, js_socket->socket);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-socket-finalizer: js_socket=%p, socket=%p\n", js_socket, js_socket->socket);
 
     if(js_socket->socket) {
         switch_socket_shutdown(js_socket->socket, SWITCH_SHUTDOWN_READWRITE);
@@ -506,7 +506,7 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
     JS_FreeCString(ctx, lo_addr_str);
     JS_FreeCString(ctx, mc_addr_str);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-socket-constructor: js_socket=%p, socket=%p\n", js_socket, js_socket->socket);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-socket-constructor: js_socket=%p, socket=%p\n", js_socket, js_socket->socket);
 
     return obj;
 

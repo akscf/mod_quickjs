@@ -320,7 +320,7 @@ static void js_fh_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-finalizer: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-fh-finalizer: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
 
     if(js_fh->fh && js_fh->fl_auto_close && !js_fh->fl_closed) {
         switch_core_file_close(js_fh->fh);
@@ -422,7 +422,7 @@ static JSValue js_fh_contructor(JSContext *ctx, JSValueConst new_target, int arg
     js_fh->fl_auto_close = SWITCH_TRUE;
     JS_SetOpaque(obj, js_fh);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-constructor: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-fh-constructor: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
 
     switch_safe_free(dpath);
     JS_FreeCString(ctx, path);
@@ -492,7 +492,7 @@ JSValue js_file_handle_object_create(JSContext *ctx, switch_file_handle_t *fh, s
     js_fh->session = session;
     JS_SetOpaque(obj, js_fh);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-fh-obj-created: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-fh-obj-created: js_fh=%p, fh=%p\n", js_fh, js_fh->fh);
 
     return obj;
 }

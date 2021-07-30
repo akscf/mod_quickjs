@@ -60,7 +60,7 @@ static void js_dtmf_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-dtmf-finalizer: js_dtmf=%p\n", js_dtmf);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-dtmf-finalizer: js_dtmf=%p\n", js_dtmf);
 
     /*if(js_dtmf->dtmf) {
         switch_safe_free(js_dtmf->dtmf);
@@ -97,7 +97,7 @@ static JSValue js_dtmf_contructor(JSContext *ctx, JSValueConst new_target, int a
 
     JS_SetOpaque(obj, js_dtmf);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-dtmf-constructor: js-dtmf=%p\n", js_dtmf);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-dtmf-constructor: js-dtmf=%p\n", js_dtmf);
 
     return obj;
 fail:
@@ -157,7 +157,7 @@ JSValue js_dtmf_object_create(JSContext *ctx, switch_dtmf_t *dtmf) {
     js_dtmf->dtmf = dtmf;
     JS_SetOpaque(obj, js_dtmf);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-dtmf-obj-created: js_dtmf=%p\n", js_dtmf);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-dtmf-obj-created: js_dtmf=%p\n", js_dtmf);
 
     return obj;
 }

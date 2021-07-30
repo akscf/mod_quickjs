@@ -222,7 +222,7 @@ static void js_codec_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-codec-finalizer: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-codec-finalizer: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
 
     if(js_codec->codec && js_codec->fl_can_destroy) {
         switch_core_codec_destroy(js_codec->codec);
@@ -301,7 +301,7 @@ static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int 
 
     status = switch_core_codec_init(&js_codec->codec_base, js_codec->name, NULL, NULL, samplerate, ptime, channels, js_codec->flags, NULL, pool);
     if(status != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Couldn't activate codec (err: %d)\n", status);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't activate codec (err: %d)\n", status);
         err = JS_ThrowTypeError(ctx, "Codec activation filure");
         goto fail;
     }
@@ -317,7 +317,7 @@ static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int 
     JS_SetOpaque(obj, js_codec);
     JS_FreeCString(ctx, name);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-codec-constructor: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-codec-constructor: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
 
     return obj;
 
@@ -409,7 +409,7 @@ JSValue js_codec_from_session_wcodec(JSContext *ctx, switch_core_session_t *sess
 
     JS_SetOpaque(obj, js_codec);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-wcodec-from-session: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-wcodec-from-session: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
 
     return obj;
 }
@@ -456,7 +456,7 @@ JSValue js_codec_from_session_rcodec(JSContext *ctx, switch_core_session_t *sess
 
     JS_SetOpaque(obj, js_codec);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-rcodec-from-session: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-rcodec-from-session: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
 
     return obj;
 }

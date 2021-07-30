@@ -613,7 +613,7 @@ static void js_file_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-file-finalizer: js_file=%p, fd=%p, dir=%p\n", js_file, js_file->fd, js_file->dir);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-file-finalizer: js_file=%p, fd=%p, dir=%p\n", js_file, js_file->fd, js_file->dir);
 
     if(js_file->is_open) {
         if(js_file->fd) {
@@ -678,7 +678,7 @@ static JSValue js_file_contructor(JSContext *ctx, JSValueConst new_target, int a
     JS_SetOpaque(obj, js_file);
     JS_FreeCString(ctx, path);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "js-file-constructor: js-file=%p\n", js_file);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-file-constructor: js-file=%p\n", js_file);
 
     return obj;
 fail:
