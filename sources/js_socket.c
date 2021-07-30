@@ -21,6 +21,7 @@
         }
 
 static JSClassID js_socket_class_id;
+
 static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
 static void js_socket_finalizer(JSRuntime *rt, JSValue val);
 

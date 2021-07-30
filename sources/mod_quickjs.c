@@ -6,13 +6,13 @@
 
 static struct {
     switch_mutex_t          *mutex;
-    switch_mutex_t          *mutex_scripts;
-    switch_inthash_t        *scripts_map;
     switch_mutex_t          *mutex_rt;
-    JSRuntime               *qjs_rt;
+    switch_mutex_t          *mutex_scripts_map;
+    switch_inthash_t        *scripts_map;
     uint8_t                 fl_ready;
     uint8_t                 fl_shutdown;
     int                     active_threads;
+    JSRuntime               *rt;
 } globals;
 
 SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load);
@@ -20,10 +20,9 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown);
 SWITCH_MODULE_DEFINITION(mod_quickjs, mod_quickjs_load, mod_quickjs_shutdown, NULL);
 
 static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, void *obj);
-
 static script_t *script_lookup(char *name);
 static uint32_t script_sem_take(script_t *script);
-static script_instance_t *instance_lookup(script_t *script, uint32_t id);
+static script_instance_t *script_instance_lookup(script_t *script, uint32_t id);
 static void script_sem_release(script_t *script);
 static uint32_t script_instance_sem_take(script_instance_t *instance);
 static void script_instance_sem_release(script_instance_t *instance);
@@ -363,14 +362,14 @@ static script_t *script_lookup(char *name) {
     }
     id = name2id(name, strlen(name));
 
-    switch_mutex_lock(globals.mutex_scripts);
+    switch_mutex_lock(globals.mutex_scripts_map);
     script = switch_core_inthash_find(globals.scripts_map, id);
-    switch_mutex_unlock(globals.mutex_scripts);
+    switch_mutex_unlock(globals.mutex_scripts_map);
 
     return script;
 }
 
-static script_instance_t *instance_lookup(script_t *script, uint32_t id) {
+static script_instance_t *script_instance_lookup(script_t *script, uint32_t id) {
     script_instance_t *instance = NULL;
 
     if(!script || globals.fl_shutdown) {
@@ -468,7 +467,10 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     JSContext *ctx = script_instance->ctx;
     JSValue global_obj, script_obj, argc_obj, argv_obj;
 
-    /* init */
+    if(!script || !script_instance || !script_instance->ctx) {
+        return SWITCH_STATUS_FALSE;
+    }
+
     JS_SetContextOpaque(ctx, script_instance);
     global_obj = JS_GetGlobalObject(ctx);
 
@@ -537,14 +539,15 @@ static switch_status_t script_destroy(script_t *script) {
         script->fl_ready = SWITCH_FALSE;
         script->fl_destroyed = SWITCH_TRUE;
 
-        switch_mutex_lock(globals.mutex_scripts);
+        switch_mutex_lock(globals.mutex_scripts_map);
         switch_core_inthash_delete(globals.scripts_map, script->id);
-        switch_mutex_unlock(globals.mutex_scripts);
+        switch_mutex_unlock(globals.mutex_scripts_map);
 
         while(script->tx_sem > 1) {
             switch_yield(100000);
         }
 
+        switch_core_inthash_destroy(&script->instances_map);
         switch_core_destroy_memory_pool(&script->pool);
     }
     return status;
@@ -607,9 +610,9 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
             goto out;
         }
 
-        switch_mutex_lock(globals.mutex_scripts);
+        switch_mutex_lock(globals.mutex_scripts_map);
         switch_core_inthash_insert(globals.scripts_map, script->id, script);
-        switch_mutex_unlock(globals.mutex_scripts);
+        switch_mutex_unlock(globals.mutex_scripts_map);
 
         script->fl_ready = SWITCH_TRUE;
     }
@@ -675,10 +678,8 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
     }
 
     switch_mutex_lock(globals.mutex_rt);
-    script_instance->ctx = JS_NewContext(globals.qjs_rt);
-    if(script_instance->ctx) {
-        status = script_configure_ctx(script, script_instance);
-    }
+    script_instance->ctx = JS_NewContext(globals.rt);
+    status = script_configure_ctx(script, script_instance);
     switch_mutex_unlock(globals.mutex_rt);
 
     if(!script_instance->ctx || status != SWITCH_STATUS_SUCCESS) {
@@ -693,7 +694,7 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
 
         clen = (script->code_length + strlen(script_tmp_buff));
 
-        switch_zmalloc(script_buf_local, clen + 1);
+        switch_zmalloc(script_buf_local, clen + 1); // for '\0' at the end
         memcpy(script_buf_local, script_tmp_buff, strlen(script_tmp_buff));
         memcpy(script_buf_local + strlen(script_tmp_buff), script->code, script->code_length);
 
@@ -709,7 +710,7 @@ static void *SWITCH_THREAD_FUNC script_instance_thread(switch_thread_t *thread, 
     }
 
     JS_FreeValue(script_instance->ctx, result);
-    JS_RunGC(globals.qjs_rt);
+    JS_RunGC(globals.rt);
 out:
     script_instance->fl_ready = SWITCH_FALSE;
     script_instance->fl_destroyed = SWITCH_TRUE;
@@ -776,7 +777,7 @@ SWITCH_STANDARD_API(quickjs_cmd) {
             switch_hash_index_t *hidx = NULL;
             switch_hash_index_t *hidx2 = NULL;
 
-            switch_mutex_lock(globals.mutex_scripts);
+            switch_mutex_lock(globals.mutex_scripts_map);
             for(hidx = switch_core_hash_first_iter(globals.scripts_map, hidx); hidx; hidx = switch_core_hash_next(&hidx)) {
                 void *hval = NULL;
                 script_t *script = NULL;
@@ -801,7 +802,7 @@ SWITCH_STANDARD_API(quickjs_cmd) {
                     script_sem_release(script);
                 }
             }
-            switch_mutex_unlock(globals.mutex_scripts);
+            switch_mutex_unlock(globals.mutex_scripts_map);
             goto out;
         }
         goto usage;
@@ -826,11 +827,10 @@ SWITCH_STANDARD_API(quickjs_cmd) {
         script = script_lookup(sname);
         if(script_sem_take(script)) {
             if(!zstr(sid)) {
-                script_instance = instance_lookup(script, strtol(sid, NULL, 16));
+                script_instance = script_instance_lookup(script, strtol(sid, NULL, 16));
                 if(script_instance_sem_take(script_instance)) {
+                    // todo
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Interrupt %s/%x [1]\n", script->name, script_instance->id);
-                    //
-                    //
                     script_instance_sem_release(script_instance);
                 }
             } else {
@@ -840,9 +840,8 @@ SWITCH_STANDARD_API(quickjs_cmd) {
                     switch_core_hash_this(hidx, NULL, NULL, &hval);
                     script_instance = (script_instance_t *)hval;
                     if(script_instance_sem_take(script_instance)) {
+                        // todo
                         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Interrupt %s/%x [2]\n", script->name, script_instance->id);
-                        //
-                        //
                         script_instance_sem_release(script_instance);
                     }
                 }
@@ -901,17 +900,17 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     memset(&globals, 0, sizeof (globals));
     switch_core_inthash_init(&globals.scripts_map);
     switch_mutex_init(&globals.mutex, SWITCH_MUTEX_NESTED, pool);
-    switch_mutex_init(&globals.mutex_scripts, SWITCH_MUTEX_NESTED, pool);
+    switch_mutex_init(&globals.mutex_scripts_map, SWITCH_MUTEX_NESTED, pool);
     switch_mutex_init(&globals.mutex_rt, SWITCH_MUTEX_NESTED, pool);
 
-    /* quickjs */
-    globals.qjs_rt = JS_NewRuntime();
-    if(!globals.qjs_rt) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create qjs runtime (JS_NewRuntime fail)\n");
+    /* rt */
+    globals.rt = JS_NewRuntime();
+    if(!globals.rt) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create js runtime\n");
         switch_goto_status(SWITCH_STATUS_GENERR, done);
     }
-    JS_SetCanBlock(globals.qjs_rt, 1);
-    JS_SetRuntimeInfo(globals.qjs_rt, "mod_quickjs");
+    JS_SetCanBlock(globals.rt, 1);
+    JS_SetRuntimeInfo(globals.rt, "mod_quickjs");
 
     /* xml config */
     if((xml = switch_xml_open_cfg(CONFIG_NAME, &cfg, NULL)) == NULL) {
@@ -967,7 +966,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
         switch_yield(100000);
     }
 
-    switch_mutex_lock(globals.mutex_scripts);
+    switch_mutex_lock(globals.mutex_scripts_map);
     for(hidx = switch_core_hash_first_iter(globals.scripts_map, hidx); hidx; hidx = switch_core_hash_next(&hidx)) {
         script_t *script = NULL;
 
@@ -976,17 +975,17 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
 
         if(script_sem_take(script)) {
             //
-            // todo: try to interrupt
+            // todo
             //
             script_sem_release(script);
         }
     }
     switch_safe_free(hidx);
     switch_core_inthash_destroy(&globals.scripts_map);
-    switch_mutex_unlock(globals.mutex_scripts);
+    switch_mutex_unlock(globals.mutex_scripts_map);
 
-    if(globals.qjs_rt) {
-        JS_FreeRuntime(globals.qjs_rt);
+    if(globals.rt) {
+        JS_FreeRuntime(globals.rt);
     }
 
     return SWITCH_STATUS_SUCCESS;

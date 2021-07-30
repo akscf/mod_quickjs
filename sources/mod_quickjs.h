@@ -45,6 +45,7 @@ typedef struct {
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
     switch_inthash_t        *instances_map;
+    switch_inthash_t        *classes_map;
 } script_t;
 
 void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx);

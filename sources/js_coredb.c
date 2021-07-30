@@ -17,6 +17,7 @@
         }
 
 static JSClassID js_coredb_class_id;
+
 static void js_coredb_finalizer(JSRuntime *rt, JSValue val);
 static int db_callback(void *udata, int argc, char **argv, char **columnNames);
 
@@ -43,6 +44,51 @@ static JSValue js_coredb_property_set(JSContext *ctx, JSValueConst this_val, JSV
     return JS_FALSE;
 }
 
+static JSValue js_coredb_table_exists(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    switch_core_db_stmt_t *stmt = NULL;
+    const char *table_name = NULL;
+    char *sql = NULL;
+    JSValue ret_value = JS_FALSE;
+    int wait = 5000, rows = 0, ret = 0;
+
+    DB_SANITY_CHECK();
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "Invalid arguments");
+    }
+
+    table_name = JS_ToCString(ctx, argv[0]);
+    if(zstr(table_name)) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: tableName");
+    }
+
+    sql = switch_mprintf("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'", table_name);
+    if(switch_core_db_prepare(js_coredb->db, sql, -1, &stmt, 0) != 0) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "SQL error: %s\n", switch_core_db_errmsg(js_coredb->db));
+        goto out;
+    }
+
+    while(wait > 0) {
+        ret = switch_core_db_step(stmt);
+        if(ret == SWITCH_CORE_DB_BUSY) {
+            wait--; switch_cond_next();
+            continue;
+        }
+        if(ret == SWITCH_CORE_DB_ROW) {
+            rows++;
+            break;
+        }
+        switch_core_db_finalize(stmt);
+        break;
+    }
+
+    ret_value = (rows > 0 ? JS_TRUE : JS_FALSE);
+out:
+    JS_FreeCString(ctx, table_name);
+    switch_safe_free(sql);
+    return ret_value;
+}
 
 static JSValue js_coredb_exec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
@@ -124,7 +170,7 @@ static JSValue js_coredb_prepare(JSContext *ctx, JSValueConst this_val, int argc
 static JSValue js_coredb_fetch(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
     int cols = 0, i = 0;
-    JSValue result;
+    JSValue row_data;
 
     DB_SANITY_CHECK();
 
@@ -132,33 +178,38 @@ static JSValue js_coredb_fetch(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_ThrowTypeError(ctx, "No active statement");
     }
 
-    result = JS_NewArray(ctx);
-
+    row_data = JS_NewObject(ctx);
     cols = switch_core_db_column_count(js_coredb->stmt);
     for(i = 0; i < cols; i++) {
         const char *var = (char *) switch_core_db_column_name(js_coredb->stmt, i);
         const char *val = (char *) switch_core_db_column_text(js_coredb->stmt, i);
 
-        JS_SetPropertyStr(ctx, result, var, JS_NewString(ctx, val));
+        JS_SetPropertyStr(ctx, row_data, var, JS_NewString(ctx, val));
     }
 
-    return result;
+    return row_data;
 }
 
 static JSValue js_coredb_next(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
-    int loops = 0, success = 0;
+    int wait = 5000, success = 0;
 
     DB_SANITY_CHECK();
     DB_SANITY_CHECK_STATEMENT();
 
-    while(loops < 5000) {
+    while(wait > 0) {
         int ret = switch_core_db_step(js_coredb->stmt);
         if(ret == SWITCH_CORE_DB_BUSY) {
-            switch_cond_next(); loops++; continue;
+            switch_cond_next(); wait--;
+            continue;
         }
         if(ret == SWITCH_CORE_DB_ROW) {
-            success = 1; break;
+            success = 1;
+            break;
+        }
+        if(ret == SWITCH_CORE_DB_DONE) {
+            success = 0;
+            break;
         }
         if(switch_core_db_finalize(js_coredb->stmt) != SWITCH_CORE_DB_OK) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "SQL error: %s\n", switch_core_db_errmsg(js_coredb->db));
@@ -172,18 +223,20 @@ static JSValue js_coredb_next(JSContext *ctx, JSValueConst this_val, int argc, J
 
 static JSValue js_coredb_step(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
-    int loops = 0, success = 0;
+    int wait = 5000, success = 0;
 
     DB_SANITY_CHECK();
     DB_SANITY_CHECK_STATEMENT();
 
-    while(loops < 5000) {
+    while(wait > 0) {
         int ret = switch_core_db_step(js_coredb->stmt);
         if(ret == SWITCH_CORE_DB_BUSY) {
-            switch_cond_next(); loops++; continue;
+            switch_cond_next(); wait--;
+            continue;
         }
         if(ret == SWITCH_CORE_DB_DONE) {
-            success = 1; break;
+            success = 1;
+            break;
         }
         if(switch_core_db_finalize(js_coredb->stmt) != SWITCH_CORE_DB_OK) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "SQL error: %s\n", switch_core_db_errmsg(js_coredb->db));
@@ -248,8 +301,9 @@ static JSValue js_coredb_bind_int(JSContext *ctx, JSValueConst this_val, int arg
 static int db_callback(void *udata, int argc, char **argv, char **columnNames) {
     js_coredb_t *js_coredb = (js_coredb_t *) udata;
     JSContext *ctx = (js_coredb ? js_coredb->ctx : NULL);
-    JSValue args[2] = { 0 };
+    JSValue args[1] = { 0 };
     JSValue ret_val;
+    JSValue row_data;
     int i = 0;
 
     if(!js_coredb) {
@@ -259,20 +313,20 @@ static int db_callback(void *udata, int argc, char **argv, char **columnNames) {
         return 0;
     }
 
+    row_data = JS_NewObject(ctx);
     for(i = 0; i < argc; i++) {
-        args[0] = JS_NewString(ctx, columnNames[i]);
-        args[1] = JS_NewString(ctx, argv[i]);
-
-        ret_val = JS_Call(ctx, js_coredb->callback, JS_UNDEFINED, 2, (JSValueConst *) args);
-        if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, NULL, ctx);
-            JS_ResetUncatchableError(ctx);
-        }
-
-        JS_FreeValue(ctx, args[0]);
-        JS_FreeValue(ctx, args[1]);
-        JS_FreeValue(ctx, ret_val);
+        JS_SetPropertyStr(ctx, row_data, columnNames[i], JS_NewString(ctx, argv[i]));
     }
+    args[0] = row_data;
+
+    ret_val = JS_Call(ctx, js_coredb->callback, JS_UNDEFINED, 1, (JSValueConst *) args);
+    if(JS_IsException(ret_val)) {
+        ctx_dump_error(NULL, NULL, ctx);
+        JS_ResetUncatchableError(ctx);
+    }
+
+    JS_FreeValue(ctx, row_data);
+    JS_FreeValue(ctx, ret_val);
 
     return 0;
 }
@@ -293,6 +347,7 @@ static const JSCFunctionListEntry js_coredb_proto_funcs[] = {
     JS_CFUNC_DEF("prepare", 2, js_coredb_prepare),
     JS_CFUNC_DEF("bindText", 2, js_coredb_bind_text),
     JS_CFUNC_DEF("bindInt", 2, js_coredb_bind_int),
+    JS_CFUNC_DEF("tableExists", 1, js_coredb_table_exists),
 };
 
 static void js_coredb_finalizer(JSRuntime *rt, JSValue val) {
