@@ -114,20 +114,6 @@ JSClassID js_file_handle_class_get_id();
 switch_status_t js_file_handle_class_register(JSContext *ctx, JSValue global_obj);
 JSValue js_file_handle_object_create(JSContext *ctx, switch_file_handle_t *fh, switch_core_session_t *session);
 
-// FileIO
-typedef struct {
-    uint32_t                flags;
-    int32_t                 bufsize;
-    switch_size_t           buflen;
-    char                    *path;
-    char                    *buf;
-    switch_file_t           *fd;
-    switch_memory_pool_t    *pool;
-} js_fileio_t;
-
-JSClassID js_fileio_class_get_id();
-switch_status_t js_fileio_class_register(JSContext *ctx, JSValue global_obj);
-
 // File
 typedef struct {
     uint8_t                 is_open;
@@ -152,6 +138,7 @@ typedef struct {
     uint8_t                 type;
     uint8_t                 nonblock;
     uint8_t                 mcttl;
+    uint32_t                timeout;
     switch_sockaddr_t       *toaddr;
     switch_sockaddr_t       *loaddr;
     switch_size_t           buffer_size;

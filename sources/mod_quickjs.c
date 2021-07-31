@@ -227,12 +227,12 @@ static JSValue js_exit(JSContext *ctx, JSValueConst this_val, int argc, JSValueC
     const char *exit_code;
 
     if(!argc) {
-        return JS_FALSE;
+        return JS_EXCEPTION;
     }
 
     exit_code = JS_ToCString(ctx, argv[0]);
     if(zstr(exit_code)) {
-        return JS_FALSE;
+        return JS_EXCEPTION;
     }
 
     ret_val = JS_ThrowTypeError(ctx, "ERROR: %s", exit_code);
@@ -480,7 +480,6 @@ static switch_status_t script_configure_ctx(script_t *script, script_instance_t 
     js_file_handle_class_register(ctx, global_obj);
     js_event_class_register(ctx, global_obj);
     js_dtmf_class_register(ctx, global_obj);
-    js_fileio_class_register(ctx, global_obj);
     js_file_class_register(ctx, global_obj);
     js_socket_class_register(ctx, global_obj);
     js_coredb_class_register(ctx, global_obj);

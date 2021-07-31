@@ -47,9 +47,7 @@ static JSValue js_socket_property_get(JSContext *ctx, JSValueConst this_val, int
             break;
         }
         case PROP_TIMEOUT: {
-            switch_interval_time_t to;
-            switch_socket_timeout_get(js_socket->socket, &to);
-            return JS_NewInt32(ctx, to);
+            return JS_NewInt32(ctx, js_socket->timeout);
         }
         case PROP_NONBLOCK: {
             return (js_socket->nonblock ? JS_TRUE : JS_FALSE);
@@ -71,9 +69,8 @@ static JSValue js_socket_property_set(JSContext *ctx, JSValueConst this_val, JSV
 
     switch(magic) {
         case PROP_TIMEOUT: {
-            uint32_t to = 0;
-            JS_ToUint32(ctx, &to, val);
-            switch_socket_timeout_set(js_socket->socket, to);
+            JS_ToUint32(ctx, &js_socket->timeout, val);
+            switch_socket_timeout_set(js_socket->socket, js_socket->timeout);
             return JS_TRUE;
         }
         case PROP_NONBLOCK: {
@@ -168,6 +165,9 @@ static JSValue js_socket_connect(JSContext *ctx, JSValueConst this_val, int argc
             goto out;
         }
 
+        switch_socket_opt_set(js_socket->socket, SWITCH_SO_KEEPALIVE, 1);
+        switch_socket_opt_set(js_socket->socket, SWITCH_SO_TCP_NODELAY, 1);
+
         status = switch_socket_connect(js_socket->socket, addr);
         if(status != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_socket_connect failed (err: %d)\n", status);
@@ -178,7 +178,12 @@ static JSValue js_socket_connect(JSContext *ctx, JSValueConst this_val, int argc
         js_socket->opened = SWITCH_TRUE;
         goto out;
     }
+
 out:
+    if(success && js_socket->nonblock) {
+        switch_socket_opt_set(js_socket->socket, SWITCH_SO_NONBLOCK, 1);
+    }
+
     JS_FreeCString(ctx, host);
     return (success ? JS_TRUE : JS_FALSE);
 }
@@ -281,6 +286,7 @@ static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, J
 static JSValue js_socket_write_string(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
     uint32_t success = 0;
+    switch_size_t len = 0;
     const char *data = NULL;
 
     SOCKET_SANITY_CHECK();
@@ -293,23 +299,26 @@ static JSValue js_socket_write_string(JSContext *ctx, JSValueConst this_val, int
     }
 
     data = JS_ToCString(ctx, argv[0]);
-    if(!zstr(data)) {
-        switch_size_t len = strlen(data);
+    if(zstr(data)) {
+        success = 0;
+        goto out;
+    }
 
-        if(js_socket->type == S_TYPE_UDP) {
-            if(switch_socket_sendto(js_socket->socket, js_socket->toaddr, 0, data, &len) == SWITCH_STATUS_SUCCESS) {
-                success = 1;
-            }
-        }
-        if(js_socket->type == S_TYPE_UDP) {
-            if(switch_socket_send(js_socket->socket, data, &len) == SWITCH_STATUS_SUCCESS) {
-                success = 1;
-            }
+    len = strlen(data);
+
+    if(js_socket->type == S_TYPE_UDP) {
+        if(switch_socket_sendto(js_socket->socket, js_socket->toaddr, 0, data, &len) == SWITCH_STATUS_SUCCESS) {
+            success = 1;
         }
     }
 
+    if(js_socket->type == S_TYPE_TCP) {
+        if(switch_socket_send(js_socket->socket, data, &len) == SWITCH_STATUS_SUCCESS) {
+            success = 1;
+        }
+    }
+out:
     JS_FreeCString(ctx, data);
-
     return (success ? JS_TRUE : JS_FALSE);
 }
 
@@ -343,12 +352,14 @@ static JSValue js_socket_read_string(JSContext *ctx, JSValueConst this_val, int 
         if(status != SWITCH_STATUS_SUCCESS || !len) {
             break;
         }
+
         for(i = 0; i < len; i++) {
             const char *delim = (usr_delimiter ? usr_delimiter : def_delimiter);
             if(tmp[i] == delim[0]) {
                 found = 1; len = i; break;
             }
         }
+
         ofs = total_length;
         total_length += len;
         if(total_length > js_socket->buffer_size) {
@@ -359,11 +370,13 @@ static JSValue js_socket_read_string(JSContext *ctx, JSValueConst this_val, int 
             js_socket->read_buffer = new_buf;
         } else {
             memcpy(js_socket->read_buffer + ofs , tmp, len);
+
         }
         if(found) {
             break;
         }
     }
+
     JS_FreeCString(ctx, usr_delimiter);
 
     if(status == SWITCH_STATUS_SUCCESS && total_length > 0) {
@@ -425,7 +438,9 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
     switch_sockaddr_t *loaddr = NULL;
     const char *lo_addr_str = NULL;
     const char *mc_addr_str = NULL;
+    uint32_t timeout = 0;
     int type = S_TYPE_TCP;
+    int nonblock = 0;
 
     if(argc > 0) {
         const char *type_str = JS_ToCString(ctx, argv[0]);
@@ -437,6 +452,10 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
             }
         }
         JS_FreeCString(ctx, type_str);
+    }
+
+    if(argc > 2) {
+        nonblock = JS_ToBool(ctx, argv[2]);
     }
 
     js_socket = js_mallocz(ctx, sizeof(js_socket_t));
@@ -451,7 +470,7 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
     }
 
     if(type == S_TYPE_UDP || type == S_TYPE_MULTICAST) {
-        if(argc > 1) {
+        if(argc > 1 ){
             lo_addr_str = JS_ToCString(ctx, argv[1]);
             if(!zstr(lo_addr_str)) {
                 status = switch_sockaddr_info_get(&loaddr, lo_addr_str, SWITCH_UNSPEC, 0, 0, pool);
@@ -481,7 +500,14 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
             goto fail;
         }
     }
+
     if(type == S_TYPE_TCP) {
+        if(argc > 1) {
+            if(JS_IsNumber(argv[1])) {
+                JS_ToUint32(ctx, &timeout, argv[1]);
+            }
+        }
+
         status = switch_socket_create(&socket, AF_INET, SOCK_STREAM, SWITCH_PROTO_TCP, pool);
         if(status != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_socket_create failed (err: %d)\n", status);
@@ -490,11 +516,19 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
         }
     }
 
+    if(socket) {
+        if(timeout > 0) {
+            switch_socket_timeout_set(socket, timeout);
+        }
+    }
+
     js_socket->mcttl = 1;
     js_socket->pool = pool;
     js_socket->type = type;
     js_socket->loaddr = loaddr;
     js_socket->socket = socket;
+    js_socket->nonblock = nonblock;
+    js_socket->timeout = timeout;
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
@@ -531,7 +565,7 @@ fail:
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-// Public api
+// Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 JSClassID js_socket_class_get_id() {
     return js_socket_class_id;
