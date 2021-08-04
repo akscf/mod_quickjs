@@ -63,7 +63,6 @@ typedef struct {
     JSValue         jss_b_obj;
 } input_callback_state_t;
 
-static JSClassID js_session_class_id;
 
 static void js_session_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
@@ -74,7 +73,7 @@ static switch_status_t sys_session_hangup_hook(switch_core_session_t *session);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     switch_caller_profile_t *caller_profile = NULL;
     switch_codec_implementation_t read_impl = { 0 };
@@ -157,13 +156,13 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
 }
 
 static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
 
     return JS_FALSE;
 }
 
 static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -188,7 +187,7 @@ static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val,
 }
 
 static JSValue js_session_set_auto_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -200,7 +199,7 @@ static JSValue js_session_set_auto_hangup(JSContext *ctx, JSValueConst this_val,
 }
 
 static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     const char *js_tts_name = NULL, *js_tts_voice = NULL;
     const char *ch_tts_name = NULL, *ch_tts_voice = NULL;
     const char *tts_text = NULL;
@@ -270,7 +269,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     const char *phrase_name = NULL, *phrase_data = NULL, *phrase_lang = NULL;
     input_callback_state_t cb_state = { 0 };
@@ -320,7 +319,7 @@ static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     char *file_obj_fname = NULL;
     const char *file_name = NULL;
@@ -339,7 +338,7 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
     CHANNEL_MEDIA_SANITY_CHECK();
 
     if(argc > 0) {
-        js_file_t *js_file = JS_GetOpaque(argv[0], js_file_class_get_id());
+        js_file_t *js_file = JS_GetOpaque(argv[0], js_file_get_classid(ctx));
         if(js_file) {
             file_obj_fname = strdup(js_file->path);
         } else {
@@ -390,7 +389,7 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
 }
 
 static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     char *file_obj_fname = NULL;
     const char *file_name = NULL;
@@ -407,7 +406,7 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
     CHANNEL_MEDIA_SANITY_CHECK();
 
     if(argc > 0) {
-        js_file_t *js_file = JS_GetOpaque(argv[0], js_file_class_get_id());
+        js_file_t *js_file = JS_GetOpaque(argv[0], js_file_get_classid(ctx));
         if(js_file) {
             file_obj_fname = strdup(js_file->path);
         } else {
@@ -458,7 +457,7 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
 }
 
 static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     input_callback_state_t cb_state = { 0 };
     switch_input_callback_function_t dtmf_func = NULL;
@@ -503,7 +502,7 @@ static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, i
 }
 
 static JSValue js_session_flush_events(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_event_t *event;
 
     SESSION_SANITY_CHECK();
@@ -515,7 +514,7 @@ static JSValue js_session_flush_events(JSContext *ctx, JSValueConst this_val, in
 }
 
 static JSValue js_session_flush_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -527,7 +526,7 @@ static JSValue js_session_flush_digits(JSContext *ctx, JSValueConst this_val, in
 }
 
 static JSValue js_session_set_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -551,7 +550,7 @@ static JSValue js_session_set_var(JSContext *ctx, JSValueConst this_val, int arg
 }
 
 static JSValue js_session_get_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -580,7 +579,7 @@ static JSValue js_session_get_var(JSContext *ctx, JSValueConst this_val, int arg
 }
 
 static JSValue js_session_get_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     const char *terminators = NULL;
     char buf[513] = { 0 };
@@ -622,7 +621,7 @@ static JSValue js_session_get_digits(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_session_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -635,7 +634,7 @@ static JSValue js_session_answer(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_session_pre_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -648,7 +647,7 @@ static JSValue js_session_pre_answer(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_session_generate_xml_cdr(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_xml_t cdr = NULL;
     JSValue result = JS_UNDEFINED;
 
@@ -665,7 +664,7 @@ static JSValue js_session_generate_xml_cdr(JSContext *ctx, JSValueConst this_val
 }
 
 static JSValue js_session_is_answered(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
 
     if(!jss || !jss->session) {
         return JS_FALSE;
@@ -675,7 +674,7 @@ static JSValue js_session_is_answered(JSContext *ctx, JSValueConst this_val, int
 }
 
 static JSValue js_session_is_media_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
 
     if(!jss || !jss->session) {
         return JS_FALSE;
@@ -685,7 +684,7 @@ static JSValue js_session_is_media_ready(JSContext *ctx, JSValueConst this_val, 
 }
 
 static JSValue js_session_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_event_t *event = NULL;
 
     SESSION_SANITY_CHECK();
@@ -698,13 +697,13 @@ static JSValue js_session_get_event(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_session_send_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
     if(argc > 0) {
         if(JS_IsObject(argv[0])) {
-            js_event_t *js_event = JS_GetOpaque2(ctx, argv[0], js_event_class_get_id());
+            js_event_t *js_event = JS_GetOpaque2(ctx, argv[0], js_event_get_classid(ctx));
 
             if(!js_event && !js_event->event) {
                 return JS_FALSE;
@@ -720,7 +719,7 @@ static JSValue js_session_send_event(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_session_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     const char *cause_name = NULL;
     switch_call_cause_t cause = SWITCH_CAUSE_NORMAL_CLEARING;
@@ -750,7 +749,7 @@ static JSValue js_session_hangup(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_session_execute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     JSValue result = JS_FALSE;
 
@@ -781,7 +780,7 @@ static JSValue js_session_execute(JSContext *ctx, JSValueConst this_val, int arg
 }
 
 static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     input_callback_state_t cb_state = { 0 };
     switch_input_callback_function_t dtmf_func = NULL;
@@ -823,7 +822,7 @@ static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc,
 }
 
 static JSValue js_session_gen_tones(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
     input_callback_state_t cb_state = { 0 };
     switch_input_callback_function_t dtmf_func = NULL;
@@ -878,7 +877,7 @@ static JSValue js_session_gen_tones(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_session_get_read_codec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -886,7 +885,7 @@ static JSValue js_session_get_read_codec(JSContext *ctx, JSValueConst this_val, 
 }
 
 static JSValue js_session_get_write_codec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -894,7 +893,7 @@ static JSValue js_session_get_write_codec(JSContext *ctx, JSValueConst this_val,
 }
 
 static JSValue js_session_frame_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_status_t status;
     switch_frame_t *read_frame = NULL;
     switch_size_t buf_size = 0;
@@ -922,7 +921,7 @@ static JSValue js_session_frame_read(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_codec_t *wcodec = NULL;
     switch_frame_t write_frame = { 0 };
     switch_status_t status;
@@ -950,7 +949,7 @@ static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int
     }
 
     if(argc > 2) {
-        js_codec_t *js_codec = JS_GetOpaque(argv[2], js_codec_class_get_id());
+        js_codec_t *js_codec = JS_GetOpaque(argv[2], js_codec_get_classid(ctx));
         if(js_codec) {
             wcodec = js_codec->codec;
         }
@@ -985,7 +984,7 @@ static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int
 }
 
 static JSValue js_session_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
 
     return js_session_hangup(ctx, this_val, argc, argv);
 }
@@ -1008,7 +1007,7 @@ static switch_status_t sys_session_hangup_hook(switch_core_session_t *session) {
                 args[0] = JS_NewInt32(ctx, state);
                 ret_val = JS_Call(ctx, jss->on_hangup, JS_UNDEFINED, 1, (JSValueConst *) args);
                 if(JS_IsException(ret_val)) {
-                    ctx_dump_error(NULL, NULL, ctx);
+                    ctx_dump_error(NULL, ctx);
                     JS_ResetUncatchableError(ctx);
                 }
                 JS_FreeValue(ctx, args[0]);
@@ -1035,7 +1034,7 @@ static switch_status_t js_record_input_callback(switch_core_session_t *session, 
 
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, NULL, ctx);
+            ctx_dump_error(NULL, ctx);
             JS_ResetUncatchableError(ctx);
         } else if(JS_IsBool(ret_val)) {
             status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
@@ -1065,7 +1064,7 @@ static switch_status_t js_playback_input_callback(switch_core_session_t *session
 
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, NULL, ctx);
+            ctx_dump_error(NULL, ctx);
             JS_ResetUncatchableError(ctx);
         } else if(JS_IsBool(ret_val)) {
             status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
@@ -1104,7 +1103,7 @@ static switch_status_t js_collect_input_callback(switch_core_session_t *session,
 
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, NULL, ctx);
+            ctx_dump_error(NULL, ctx);
             JS_ResetUncatchableError(ctx);
         } else if(JS_IsBool(ret_val)) {
             status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
@@ -1175,7 +1174,7 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
 };
 
 static void js_session_finalizer(JSRuntime *rt, JSValue val) {
-    js_session_t *jss = JS_GetOpaque(val, js_session_class_id);
+    js_session_t *jss = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
 
     if(!jss) {
         return;
@@ -1221,7 +1220,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
         } else {
              if(argc > 1) {
                 if(JS_IsObject(argv[1])) {
-                    jss_old = JS_GetOpaque2(ctx, argv[1], js_session_class_id);
+                    jss_old = JS_GetOpaque2(ctx, argv[1], js_seesion_get_classid(ctx));
                 }
                 if(switch_ivr_originate((jss_old ? jss_old->session : NULL), &jss->session, &h_cause, uuid, 60, NULL, NULL, NULL, NULL, NULL, SOF_NONE, NULL, NULL) == SWITCH_STATUS_SUCCESS) {
                     jss->fl_hup_auto = SWITCH_TRUE;
@@ -1240,7 +1239,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_session_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_seesion_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
@@ -1261,17 +1260,22 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSClassID js_seesion_class_get_id() {
-    return js_session_class_id;
+JSClassID js_seesion_get_classid(JSContext *ctx) {
+    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
 }
 
 switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj) {
-    JSValue obj_proto;
-    JSValue obj_class;
+    JSClassID class_id = 0;
+    JSValue obj_proto, obj_class;
 
-    if(!js_session_class_id) {
-        JS_NewClassID(&js_session_class_id);
-        JS_NewClass(JS_GetRuntime(ctx), js_session_class_id, &js_session_class);
+    class_id = js_seesion_get_classid(ctx);
+    if(!class_id) {
+        JS_NewClassID(&class_id);
+        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_session_class);
+
+        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
+        }
     }
 
     obj_proto = JS_NewObject(ctx);
@@ -1279,7 +1283,7 @@ switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj) {
 
     obj_class = JS_NewCFunction2(ctx, js_session_contructor, CLASS_NAME, 2, JS_CFUNC_constructor, 0);
     JS_SetConstructor(ctx, obj_class, obj_proto);
-    JS_SetClassProto(ctx, js_session_class_id, obj_proto);
+    JS_SetClassProto(ctx, class_id, obj_proto);
 
     JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
 
@@ -1287,7 +1291,7 @@ switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj) {
 }
 
 JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session) {
-    js_session_t *jss;
+    js_session_t *jss = NULL;
     JSValue obj, proto;
 
     jss = js_mallocz(ctx, sizeof(js_session_t));
@@ -1300,7 +1304,7 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
     if(JS_IsException(proto)) { return proto; }
     JS_SetPropertyFunctionList(ctx, proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_session_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_seesion_get_classid(ctx));
     JS_FreeValue(ctx, proto);
 
     if(JS_IsException(obj)) { return obj; }
@@ -1320,6 +1324,7 @@ JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, J
     input_callback_state_t cb_state = { 0 };
     switch_input_args_t args = { 0 };
     switch_input_callback_function_t dtmf_func = NULL;
+    JSClassID class_id = 0;
     int len = 0;
     void *bp = NULL;
 
@@ -1327,12 +1332,14 @@ JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_ThrowTypeError(ctx, "Invalid arguments");
     }
 
-    jss_a = JS_GetOpaque(argv[0], js_session_class_id);
+    class_id = js_seesion_get_classid(ctx);
+
+    jss_a = JS_GetOpaque(argv[0], class_id);
     if(!(jss_a && jss_a->session)) {
         return JS_ThrowTypeError(ctx, "Session A is not ready");
     }
 
-    jss_b = JS_GetOpaque(argv[1], js_session_class_id);
+    jss_b = JS_GetOpaque(argv[1], class_id);
     if(!(jss_b && jss_b->session)) {
         return JS_ThrowTypeError(ctx, "Session B is not ready");
     }

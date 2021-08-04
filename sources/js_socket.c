@@ -20,14 +20,12 @@
            return JS_ThrowTypeError(ctx, "Socket is not initialized"); \
         }
 
-static JSClassID js_socket_class_id;
-
 static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
 static void js_socket_finalizer(JSRuntime *rt, JSValue val);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_socket_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
 
     if(!js_socket) {
         return JS_UNDEFINED;
@@ -61,7 +59,7 @@ static JSValue js_socket_property_get(JSContext *ctx, JSValueConst this_val, int
 }
 
 static JSValue js_socket_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
 
     if(!js_socket || js_socket->socket) {
         return JS_UNDEFINED;
@@ -92,7 +90,7 @@ static JSValue js_socket_property_set(JSContext *ctx, JSValueConst this_val, JSV
 }
 
 static JSValue js_socket_connect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     switch_status_t status;
     switch_sockaddr_t *addr = NULL;
     const char *host = NULL;
@@ -189,7 +187,7 @@ out:
 }
 
 static JSValue js_socket_close(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
 
     if(!js_socket) {
         return JS_ThrowTypeError(ctx, "Socket is not initialized");
@@ -211,7 +209,7 @@ static JSValue js_socket_close(JSContext *ctx, JSValueConst this_val, int argc, 
 }
 
 static JSValue js_socket_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     switch_size_t buf_size = 0;
     switch_size_t len = 0;
     uint8_t *buf = NULL;
@@ -253,7 +251,7 @@ static JSValue js_socket_write(JSContext *ctx, JSValueConst this_val, int argc, 
 }
 
 static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     switch_size_t buf_size = 0;
     switch_size_t len = 0;
     uint8_t *buf = NULL;
@@ -284,7 +282,7 @@ static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_socket_write_string(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     uint32_t success = 0;
     switch_size_t len = 0;
     const char *data = NULL;
@@ -323,7 +321,7 @@ out:
 }
 
 static JSValue js_socket_read_string(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     const char *usr_delimiter = NULL;
     const char *def_delimiter = "\n";
     char tmp[1024] = "";
@@ -407,7 +405,7 @@ static const JSCFunctionListEntry js_socket_proto_funcs[] = {
 };
 
 static void js_socket_finalizer(JSRuntime *rt, JSValue val) {
-    js_socket_t *js_socket = JS_GetOpaque(val, js_socket_class_id);
+    js_socket_t *js_socket = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
 
     if(!js_socket) {
         return;
@@ -533,7 +531,7 @@ static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_socket_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_socket_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
@@ -567,17 +565,22 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSClassID js_socket_class_get_id() {
-    return js_socket_class_id;
+JSClassID js_socket_get_classid(JSContext *ctx) {
+    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
 }
 
 switch_status_t js_socket_class_register(JSContext *ctx, JSValue global_obj) {
-    JSValue obj_proto;
-    JSValue obj_class;
+    JSClassID class_id = 0;
+    JSValue obj_proto, obj_class;
 
-    if(!js_socket_class_id) {
-        JS_NewClassID(&js_socket_class_id);
-        JS_NewClass(JS_GetRuntime(ctx), js_socket_class_id, &js_socket_class);
+    class_id = js_socket_get_classid(ctx);
+    if(!class_id) {
+        JS_NewClassID(&class_id);
+        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_socket_class);
+
+        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
+        }
     }
 
     obj_proto = JS_NewObject(ctx);
@@ -585,7 +588,7 @@ switch_status_t js_socket_class_register(JSContext *ctx, JSValue global_obj) {
 
     obj_class = JS_NewCFunction2(ctx, js_socket_contructor, CLASS_NAME, 1, JS_CFUNC_constructor, 0);
     JS_SetConstructor(ctx, obj_class, obj_proto);
-    JS_SetClassProto(ctx, js_socket_class_id, obj_proto);
+    JS_SetClassProto(ctx, class_id, obj_proto);
 
     JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
 

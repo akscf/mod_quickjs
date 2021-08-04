@@ -20,35 +20,26 @@
 typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
-    uint32_t                id;
-    uint32_t                tx_sem;
-    const char              *session_id;
-    char                    *args;
-    void                    *script;
-    switch_memory_pool_t    *pool;
-    switch_mutex_t          *mutex;
-    switch_core_session_t   *session;
-    JSContext               *ctx;
-    JSValue                 int_handler;
-} script_instance_t;
-
-typedef struct {
-    uint8_t                 fl_ready;
-    uint8_t                 fl_destroyed;
-    uint32_t                id;
-    uint32_t                tx_sem;
-    uint32_t                instances;
-    switch_size_t           code_length;
+    switch_size_t           script_len;
+    uint32_t                sem;
+    char                    *id;
     char                    *name;
     char                    *path;
-    char                    *code;
+    char                    *script_buf;
+    char                    *args;
+    const char              *session_id;
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
-    switch_inthash_t        *instances_map;
-    switch_inthash_t        *classes_map;
+    switch_mutex_t          *mutex_classes_map;
+    switch_hash_t           *classes_map;
+    switch_core_session_t   *session;
+    JSContext               *ctx;
+    JSRuntime               *rt;
 } script_t;
 
-void ctx_dump_error(script_t *script, script_instance_t *instance, JSContext *ctx);
+void ctx_dump_error(script_t *script, JSContext *ctx);
+switch_status_t js_register_classid(JSRuntime *rt, const char *class_name, JSClassID class_id);
+JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name);
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------
 // Session
@@ -62,7 +53,7 @@ typedef struct {
     uint32_t                 frame_buffer_size;
 } js_session_t;
 
-JSClassID js_seesion_class_get_id();
+JSClassID js_seesion_get_classid(JSContext *ctx);
 switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj);
 JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session);
 JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
@@ -79,7 +70,7 @@ typedef struct {
     switch_codec_t          *codec;
     switch_codec_t          codec_base;
 } js_codec_t;
-JSClassID js_codec_class_get_id();
+JSClassID js_codec_get_classid(JSContext *ctx);
 switch_status_t js_codec_class_register(JSContext *ctx, JSValue global_obj);
 JSValue js_codec_from_session_wcodec(JSContext *ctx, switch_core_session_t *session);
 JSValue js_codec_from_session_rcodec(JSContext *ctx, switch_core_session_t *session);
@@ -89,7 +80,7 @@ typedef struct {
     switch_dtmf_t           *dtmf;
 } js_dtmf_t;
 
-JSClassID js_dtmf_class_get_id();
+JSClassID js_dtmf_get_classid(JSContext *ctx);
 switch_status_t js_dtmf_class_register(JSContext *ctx, JSValue global_obj);
 JSValue js_dtmf_object_create(JSContext *ctx, switch_dtmf_t *dtmf);
 
@@ -98,7 +89,7 @@ typedef struct {
     switch_event_t          *event;
 } js_event_t;
 
-JSClassID js_event_class_get_id();
+JSClassID js_event_get_classid(JSContext *ctx);
 switch_status_t js_event_class_register(JSContext *ctx, JSValue global_obj);
 JSValue js_event_object_create(JSContext *ctx, switch_event_t *event);
 
@@ -110,7 +101,7 @@ typedef struct {
     switch_file_handle_t    *fh;
 } js_file_handle_t;
 
-JSClassID js_file_handle_class_get_id();
+JSClassID js_file_handle_get_classid(JSContext *ctx);
 switch_status_t js_file_handle_class_register(JSContext *ctx, JSValue global_obj);
 JSValue js_file_handle_object_create(JSContext *ctx, switch_file_handle_t *fh, switch_core_session_t *session);
 
@@ -129,7 +120,7 @@ typedef struct {
     switch_memory_pool_t    *pool;
 } js_file_t;
 
-JSClassID js_file_class_get_id();
+JSClassID js_file_get_classid(JSContext *ctx);
 switch_status_t js_file_class_register(JSContext *ctx, JSValue global_obj);
 
 // Socket
@@ -146,7 +137,7 @@ typedef struct {
     switch_socket_t         *socket;
     char                    *read_buffer;
 } js_socket_t;
-JSClassID js_socket_class_get_id();
+JSClassID js_socket_get_classid(JSContext *ctx);
 switch_status_t js_socket_class_register(JSContext *ctx, JSValue global_obj);
 
 // CoreDB
@@ -158,7 +149,7 @@ typedef struct {
     JSContext               *ctx;
     JSValue                 callback;
 } js_coredb_t;
-JSClassID js_coredb_class_get_id();
+JSClassID js_coredb_get_classid(JSContext *ctx);
 switch_status_t js_coredb_class_register(JSContext *ctx, JSValue global_obj);
 
 // EventHandler
@@ -170,7 +161,7 @@ typedef struct {
     switch_queue_t          *event_queue;
     switch_event_t          *filters;
 } js_eventhandler_t;
-JSClassID js_eventhandler_class_get_id();
+JSClassID js_eventhandler_get_classid(JSContext *ctx);
 switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_obj);
 
 #ifdef JS_CURL_ENABLE
@@ -185,7 +176,7 @@ typedef struct {
     char                    *response_buffer;
     switch_memory_pool_t    *pool;
 } js_curl_t;
-JSClassID js_curl_class_get_id();
+JSClassID js_curl_get_classid(JSContext *ctx);
 switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj);
 #endif // JS_CURL_ENABLE
 

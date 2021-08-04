@@ -13,13 +13,11 @@
            return JS_ThrowTypeError(ctx, "Event is not initialized"); \
         }
 
-
-static JSClassID js_event_class_id;
 static void js_event_finalizer(JSRuntime *rt, JSValue val);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_event_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
 
     if(magic == PROP_READY) {
         uint8_t x = (js_event && js_event->event);
@@ -34,13 +32,13 @@ static JSValue js_event_property_get(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_event_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
 
     return JS_FALSE;
 }
 
 static JSValue js_event_add_header(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
     const char *hdr_name = NULL;
     const char *hdr_value = NULL;
 
@@ -62,7 +60,7 @@ static JSValue js_event_add_header(JSContext *ctx, JSValueConst this_val, int ar
 }
 
 static JSValue js_event_get_header(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
     const char *hdr_name = NULL;
     char *val = NULL;
 
@@ -81,7 +79,7 @@ static JSValue js_event_get_header(JSContext *ctx, JSValueConst this_val, int ar
 }
 
 static JSValue js_event_add_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
     const char *body = NULL;
 
     EVENT_SANITY_CHECK();
@@ -99,7 +97,7 @@ static JSValue js_event_add_body(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_event_get_body(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
 
     EVENT_SANITY_CHECK();
 
@@ -107,7 +105,7 @@ static JSValue js_event_get_body(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_event_get_type(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
 
     EVENT_SANITY_CHECK();
 
@@ -115,7 +113,7 @@ static JSValue js_event_get_type(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_event_serialize(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
     JSValue result;
     char *buf = NULL;
     uint8_t type = 0;
@@ -157,7 +155,7 @@ static JSValue js_event_serialize(JSContext *ctx, JSValueConst this_val, int arg
 }
 
 static JSValue js_event_fire(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
 
     EVENT_SANITY_CHECK();
 
@@ -168,7 +166,7 @@ static JSValue js_event_fire(JSContext *ctx, JSValueConst this_val, int argc, JS
 }
 
 static JSValue js_event_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque2(ctx, this_val, js_event_get_classid(ctx));
 
     return JS_FALSE;
 }
@@ -193,7 +191,7 @@ static const JSCFunctionListEntry js_event_proto_funcs[] = {
 };
 
 static void js_event_finalizer(JSRuntime *rt, JSValue val) {
-    js_event_t *js_event = JS_GetOpaque(val, js_event_class_id);
+    js_event_t *js_event = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
 
     if(!js_event) {
         return;
@@ -256,7 +254,7 @@ static JSValue js_event_contructor(JSContext *ctx, JSValueConst new_target, int 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_event_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_event_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
@@ -280,17 +278,22 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSClassID js_event_class_get_id() {
-    return js_event_class_id;
+JSClassID js_event_get_classid(JSContext *ctx) {
+    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
 }
 
 switch_status_t js_event_class_register(JSContext *ctx, JSValue global_obj) {
-    JSValue obj_proto;
-    JSValue obj_class;
+    JSClassID class_id = 0;
+    JSValue obj_proto, obj_class;
 
-    if(!js_event_class_id) {
-        JS_NewClassID(&js_event_class_id);
-        JS_NewClass(JS_GetRuntime(ctx), js_event_class_id, &js_event_class);
+    class_id = js_event_get_classid(ctx);
+    if(!class_id) {
+        JS_NewClassID(&class_id);
+        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_event_class);
+
+        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
+        }
     }
 
     obj_proto = JS_NewObject(ctx);
@@ -298,7 +301,7 @@ switch_status_t js_event_class_register(JSContext *ctx, JSValue global_obj) {
 
     obj_class = JS_NewCFunction2(ctx, js_event_contructor, CLASS_NAME, 1, JS_CFUNC_constructor, 0);
     JS_SetConstructor(ctx, obj_class, obj_proto);
-    JS_SetClassProto(ctx, js_event_class_id, obj_proto);
+    JS_SetClassProto(ctx, class_id, obj_proto);
 
     JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
 
@@ -319,7 +322,7 @@ JSValue js_event_object_create(JSContext *ctx, switch_event_t *event) {
     if(JS_IsException(proto)) { return proto; }
     JS_SetPropertyFunctionList(ctx, proto, js_event_proto_funcs, ARRAY_SIZE(js_event_proto_funcs));
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_event_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_event_get_classid(ctx));
     JS_FreeValue(ctx, proto);
 
     if(JS_IsException(obj)) { return obj; }

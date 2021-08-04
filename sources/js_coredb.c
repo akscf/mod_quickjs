@@ -16,14 +16,12 @@
            return JS_ThrowTypeError(ctx, "No active statement"); \
         }
 
-static JSClassID js_coredb_class_id;
-
 static void js_coredb_finalizer(JSRuntime *rt, JSValue val);
 static int db_callback(void *udata, int argc, char **argv, char **columnNames);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_coredb_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
 
     if(!js_coredb) {
         return JS_UNDEFINED;
@@ -39,13 +37,13 @@ static JSValue js_coredb_property_get(JSContext *ctx, JSValueConst this_val, int
 }
 
 static JSValue js_coredb_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
 
     return JS_FALSE;
 }
 
 static JSValue js_coredb_table_exists(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     switch_core_db_stmt_t *stmt = NULL;
     const char *table_name = NULL;
     char *sql = NULL;
@@ -91,7 +89,7 @@ out:
 }
 
 static JSValue js_coredb_exec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     switch_core_db_callback_func_t cbfnc = NULL;
     int count = 0;
     const char *sqltxt = NULL;
@@ -136,7 +134,7 @@ static JSValue js_coredb_exec(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_coredb_prepare(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     int ret = 0;
     const char *sqltxt = NULL;
 
@@ -168,7 +166,7 @@ static JSValue js_coredb_prepare(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_coredb_fetch(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     int cols = 0, i = 0;
     JSValue row_data;
 
@@ -191,7 +189,7 @@ static JSValue js_coredb_fetch(JSContext *ctx, JSValueConst this_val, int argc, 
 }
 
 static JSValue js_coredb_next(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     int wait = 5000, success = 0;
 
     DB_SANITY_CHECK();
@@ -222,7 +220,7 @@ static JSValue js_coredb_next(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_coredb_step(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     int wait = 5000, success = 0;
 
     DB_SANITY_CHECK();
@@ -250,7 +248,7 @@ static JSValue js_coredb_step(JSContext *ctx, JSValueConst this_val, int argc, J
 
 
 static JSValue js_coredb_bind_text(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     const char *val = NULL;
     int idx = 0, err = 0;
 
@@ -273,7 +271,7 @@ static JSValue js_coredb_bind_text(JSContext *ctx, JSValueConst this_val, int ar
 }
 
 static JSValue js_coredb_bind_int(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     int idx = 0, val = 0, err = 0;
 
     DB_SANITY_CHECK();
@@ -321,7 +319,7 @@ static int db_callback(void *udata, int argc, char **argv, char **columnNames) {
 
     ret_val = JS_Call(ctx, js_coredb->callback, JS_UNDEFINED, 1, (JSValueConst *) args);
     if(JS_IsException(ret_val)) {
-        ctx_dump_error(NULL, NULL, ctx);
+        ctx_dump_error(NULL, ctx);
         JS_ResetUncatchableError(ctx);
     }
 
@@ -351,7 +349,7 @@ static const JSCFunctionListEntry js_coredb_proto_funcs[] = {
 };
 
 static void js_coredb_finalizer(JSRuntime *rt, JSValue val) {
-    js_coredb_t *js_coredb = JS_GetOpaque(val, js_coredb_class_id);
+    js_coredb_t *js_coredb = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
     switch_memory_pool_t *pool = (js_coredb ? js_coredb->pool : NULL);
 
     if(!js_coredb) {
@@ -419,7 +417,7 @@ static JSValue js_coredb_contructor(JSContext *ctx, JSValueConst new_target, int
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_coredb_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_coredb_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
@@ -447,17 +445,22 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSClassID js_coredb_class_get_id() {
-    return js_coredb_class_id;
+JSClassID js_coredb_get_classid(JSContext *ctx) {
+    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
 }
 
 switch_status_t js_coredb_class_register(JSContext *ctx, JSValue global_obj) {
-    JSValue obj_proto;
-    JSValue obj_class;
+    JSClassID class_id = 0;
+    JSValue obj_proto, obj_class;
 
-    if(!js_coredb_class_id) {
-        JS_NewClassID(&js_coredb_class_id);
-        JS_NewClass(JS_GetRuntime(ctx), js_coredb_class_id, &js_coredb_class);
+    class_id = js_coredb_get_classid(ctx);
+    if(!class_id) {
+        JS_NewClassID(&class_id);
+        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_coredb_class);
+
+        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
+        }
     }
 
     obj_proto = JS_NewObject(ctx);
@@ -465,7 +468,7 @@ switch_status_t js_coredb_class_register(JSContext *ctx, JSValue global_obj) {
 
     obj_class = JS_NewCFunction2(ctx, js_coredb_contructor, CLASS_NAME, 1, JS_CFUNC_constructor, 0);
     JS_SetConstructor(ctx, obj_class, obj_proto);
-    JS_SetClassProto(ctx, js_coredb_class_id, obj_proto);
+    JS_SetClassProto(ctx, class_id, obj_proto);
 
     JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
 

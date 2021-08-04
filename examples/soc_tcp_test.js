@@ -15,7 +15,7 @@ if(soc.connect('127.0.0.1', 5555)) {
         exit();
     }
 
-    console_log('notice', "waiting for client response...");
+    console_log('notice', "waiting for a client response...");
     var data = soc.readString();
     if(data) {
         console_log('notice', "readString: " + data);

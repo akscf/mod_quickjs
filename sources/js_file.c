@@ -34,7 +34,6 @@
            return JS_ThrowTypeError(ctx, "Direactory is not opened"); \
         }
 
-static JSClassID js_file_class_id;
 static void js_file_finalizer(JSRuntime *rt, JSValue val);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -82,7 +81,7 @@ static uint8_t xx_try_access(js_file_t *js_file, int flags) {
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_file_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
 
     if(!js_file) {
         return JS_UNDEFINED;
@@ -171,14 +170,14 @@ static JSValue js_file_property_get(JSContext *ctx, JSValueConst this_val, int m
 }
 
 static JSValue js_file_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
 
     return JS_FALSE;
 }
 
 
 static JSValue js_file_exists(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
 
     FILE_SANITY_CHECK();
 
@@ -201,7 +200,7 @@ static JSValue js_file_exists(JSContext *ctx, JSValueConst this_val, int argc, J
 
 static const unsigned char padchar[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 static JSValue js_file_mktemp(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     JSValue ret_val = JS_FALSE;
     int i = 0, j = 0,  len = 0;
 
@@ -234,7 +233,7 @@ static JSValue js_file_mktemp(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_file_open(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     uint32_t flags = 0;
 
     FILE_SANITY_CHECK();
@@ -274,7 +273,7 @@ static JSValue js_file_open(JSContext *ctx, JSValueConst this_val, int argc, JSV
 }
 
 static JSValue js_file_close(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
 
     FILE_SANITY_CHECK();
 
@@ -296,7 +295,7 @@ static JSValue js_file_close(JSContext *ctx, JSValueConst this_val, int argc, JS
 }
 
 static JSValue js_file_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     switch_size_t size = 0, len = 0;
     uint8_t *buf = NULL;
 
@@ -330,7 +329,7 @@ static JSValue js_file_read(JSContext *ctx, JSValueConst this_val, int argc, JSV
 }
 
 static JSValue js_file_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     switch_size_t size = 0, len = 0;
     uint8_t *buf = NULL;
 
@@ -362,7 +361,7 @@ static JSValue js_file_write(JSContext *ctx, JSValueConst this_val, int argc, JS
 }
 
 static JSValue js_file_write_str(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     switch_status_t status;
     switch_size_t len = 0;
     const char *str = NULL;
@@ -386,7 +385,7 @@ static JSValue js_file_write_str(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_file_read_str(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     switch_size_t len = 0;
 
     FILE_SANITY_CHECK_OPEN();
@@ -416,7 +415,7 @@ static JSValue js_file_read_str(JSContext *ctx, JSValueConst this_val, int argc,
 }
 
 static JSValue js_file_seek(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     int64_t ofs = 0;
 
 
@@ -436,7 +435,7 @@ static JSValue js_file_seek(JSContext *ctx, JSValueConst this_val, int argc, JSV
 }
 
 static JSValue js_file_remove(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     char *cmd = NULL;
 
     FILE_SANITY_CHECK();
@@ -465,7 +464,7 @@ static JSValue js_file_remove(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_file_rename(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     JSValue ret_val = JS_FALSE;
     const char *to_path = NULL;
 
@@ -491,7 +490,7 @@ static JSValue js_file_rename(JSContext *ctx, JSValueConst this_val, int argc, J
 }
 
 static JSValue js_file_copy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     JSValue ret_val;
     const char *to_path = NULL;
 
@@ -513,7 +512,7 @@ static JSValue js_file_copy(JSContext *ctx, JSValueConst this_val, int argc, JSV
 }
 
 static JSValue js_file_mkdir(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     JSValue ret_val;
 
     FILE_SANITY_CHECK();
@@ -528,7 +527,7 @@ static JSValue js_file_mkdir(JSContext *ctx, JSValueConst this_val, int argc, JS
 }
 
 static JSValue js_file_dir_list(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque2(ctx, this_val, js_file_get_classid(ctx));
     char file_buf[128] = "";
     char path_buf[1024] = "";
     JSValue js_cb;
@@ -559,7 +558,7 @@ static JSValue js_file_dir_list(JSContext *ctx, JSValueConst this_val, int argc,
 
         ret_val = JS_Call(ctx, js_cb, this_val, 2, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, NULL, ctx);
+            ctx_dump_error(NULL, ctx);
             JS_ResetUncatchableError(ctx);
         }
 
@@ -607,7 +606,7 @@ static const JSCFunctionListEntry js_file_proto_funcs[] = {
 };
 
 static void js_file_finalizer(JSRuntime *rt, JSValue val) {
-    js_file_t *js_file = JS_GetOpaque(val, js_file_class_id);
+    js_file_t *js_file = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
 
     if(!js_file) {
         return;
@@ -671,7 +670,7 @@ static JSValue js_file_contructor(JSContext *ctx, JSValueConst new_target, int a
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_file_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_file_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
@@ -696,17 +695,22 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSClassID js_file_class_get_id() {
-    return js_file_class_id;
+JSClassID js_file_get_classid(JSContext *ctx) {
+    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
 }
 
 switch_status_t js_file_class_register(JSContext *ctx, JSValue global_obj) {
-    JSValue obj_proto;
-    JSValue obj_class;
+    JSClassID class_id = 0;
+    JSValue obj_proto, obj_class;
 
-    if(!js_file_class_id) {
-        JS_NewClassID(&js_file_class_id);
-        JS_NewClass(JS_GetRuntime(ctx), js_file_class_id, &js_file_class);
+    class_id = js_file_get_classid(ctx);
+    if(!class_id) {
+        JS_NewClassID(&class_id);
+        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_file_class);
+
+        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
+        }
     }
 
     obj_proto = JS_NewObject(ctx);
@@ -714,7 +718,7 @@ switch_status_t js_file_class_register(JSContext *ctx, JSValue global_obj) {
 
     obj_class = JS_NewCFunction2(ctx, js_file_contructor, CLASS_NAME, 1, JS_CFUNC_constructor, 0);
     JS_SetConstructor(ctx, obj_class, obj_proto);
-    JS_SetClassProto(ctx, js_file_class_id, obj_proto);
+    JS_SetClassProto(ctx, class_id, obj_proto);
 
     JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
 

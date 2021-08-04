@@ -23,13 +23,12 @@
            return JS_ThrowTypeError(ctx, "CURL is not initialized"); \
         }
 
-static JSClassID js_curl_class_id;
 static void js_curl_finalizer(JSRuntime *rt, JSValue val);
 static size_t write_callback(void *ptr, size_t size, size_t nmemb, void *data);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_curl_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
-    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_class_id);
+    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
 
     if(magic == PROP_IS_READY) {
         uint8_t x = (js_curl != NULL);
@@ -68,7 +67,7 @@ static JSValue js_curl_property_get(JSContext *ctx, JSValueConst this_val, int m
 }
 
 static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_class_id);
+    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     const char *str = NULL;
     int copy = 1;
 
@@ -135,7 +134,7 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
 }
 
 static JSValue js_curl_do_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_class_id);
+    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     struct curl_slist *headers = NULL;
     switch_CURL *curl_handle = NULL;
     const char *req_data = NULL;
@@ -227,7 +226,7 @@ static JSValue js_curl_do_request(JSContext *ctx, JSValueConst this_val, int arg
 }
 
 static JSValue js_curl_upload_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_class_id);
+    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     //
     // todo
     //
@@ -270,7 +269,7 @@ static const JSCFunctionListEntry js_curl_proto_funcs[] = {
 };
 
 static void js_curl_finalizer(JSRuntime *rt, JSValue val) {
-    js_curl_t *js_curl = JS_GetOpaque(val, js_curl_class_id);
+    js_curl_t *js_curl = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
     switch_memory_pool_t *pool = (js_curl ? js_curl->pool : NULL);
 
     if(!js_curl) {
@@ -351,7 +350,7 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_curl_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_curl_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
@@ -384,17 +383,22 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSClassID js_curl_class_get_id() {
-    return js_curl_class_id;
+JSClassID js_curl_get_classid(JSContext *ctx) {
+    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
 }
 
 switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj) {
-    JSValue obj_proto;
-    JSValue obj_class;
+    JSClassID class_id = 0;
+    JSValue obj_proto, obj_class;
 
-    if(!js_curl_class_id) {
-        JS_NewClassID(&js_curl_class_id);
-        JS_NewClass(JS_GetRuntime(ctx), js_curl_class_id, &js_curl_class);
+    class_id = js_curl_get_classid(ctx);
+    if(!class_id) {
+        JS_NewClassID(&class_id);
+        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_curl_class);
+
+        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
+        }
     }
 
     obj_proto = JS_NewObject(ctx);
@@ -402,7 +406,7 @@ switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj) {
 
     obj_class = JS_NewCFunction2(ctx, js_curl_contructor, CLASS_NAME, 1, JS_CFUNC_constructor, 0);
     JS_SetConstructor(ctx, obj_class, obj_proto);
-    JS_SetClassProto(ctx, js_curl_class_id, obj_proto);
+    JS_SetClassProto(ctx, class_id, obj_proto);
 
     JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
 

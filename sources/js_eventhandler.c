@@ -15,12 +15,11 @@
            return JS_ThrowTypeError(ctx, "Handler is not initialized"); \
         }
 
-static JSClassID js_eventhandler_class_id;
 static void js_eventhandler_finalizer(JSRuntime *rt, JSValue val);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_eventhandler_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_get_classid(ctx));
 
     if(magic == PROP_IS_READY) {
         uint8_t x = (js_eventhandler && js_eventhandler->event_queue);
@@ -35,12 +34,12 @@ static JSValue js_eventhandler_property_get(JSContext *ctx, JSValueConst this_va
 }
 
 static JSValue js_eventhandler_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_get_classid(ctx));
     return JS_FALSE;
 }
 
 static JSValue js_eventhandler_subscribe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_get_classid(ctx));
     switch_event_types_t etype;
     int i = 0, j = 0, custom = 0, success = 0;
 
@@ -82,7 +81,7 @@ static JSValue js_eventhandler_subscribe(JSContext *ctx, JSValueConst this_val, 
 }
 
 static JSValue js_eventhandler_unsubscribe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_get_classid(ctx));
     switch_event_types_t etype;
     int i = 0, j = 0, custom = 0, success = 0;
 
@@ -122,7 +121,7 @@ static JSValue js_eventhandler_unsubscribe(JSContext *ctx, JSValueConst this_val
 }
 
 static JSValue js_eventhandler_add_filter(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_get_classid(ctx));
     JSValue err = JS_UNDEFINED;
     const char *hdr_name = NULL;
     const char *hdr_val = NULL;
@@ -161,7 +160,7 @@ out:
 }
 
 static JSValue js_eventhandler_del_filter(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_get_classid(ctx));
     JSValue err = JS_UNDEFINED;
     const char *hdr_name = NULL;
 
@@ -198,7 +197,7 @@ out:
 }
 
 static JSValue js_eventhandler_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_get_classid(ctx));
     switch_event_t *pevent = NULL;
     uint32_t timeout = 0;
     void *pop = NULL;
@@ -227,7 +226,7 @@ static JSValue js_eventhandler_get_event(JSContext *ctx, JSValueConst this_val, 
 }
 
 static JSValue js_eventhandler_send_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque2(ctx, this_val, js_eventhandler_get_classid(ctx));
     JSValue err = JS_UNDEFINED;
     js_event_t *js_event = NULL;
     switch_core_session_t *session = NULL;
@@ -240,7 +239,7 @@ static JSValue js_eventhandler_send_event(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Invalid arguments");
     }
 
-    js_event = JS_GetOpaque(argv[0], js_event_class_get_id());
+    js_event = JS_GetOpaque(argv[0], js_event_get_classid(ctx));
     if(!js_event) {
         err = JS_ThrowTypeError(ctx, "Invalid argument: event");
         goto out;
@@ -259,7 +258,7 @@ static JSValue js_eventhandler_send_event(JSContext *ctx, JSValueConst this_val,
                 goto out;
             }
         } else {
-            js_session_t *jss = JS_GetOpaque(argv[1], js_seesion_class_get_id());
+            js_session_t *jss = JS_GetOpaque(argv[1], js_seesion_get_classid(ctx));
             if(!jss || !jss->session) {
                 err = JS_ThrowTypeError(ctx, "Invalid argument: session");
                 goto out;
@@ -300,7 +299,7 @@ static const JSCFunctionListEntry js_eventhandler_proto_funcs[] = {
 };
 
 static void js_eventhandler_finalizer(JSRuntime *rt, JSValue val) {
-    js_eventhandler_t *js_eventhandler = JS_GetOpaque(val, js_eventhandler_class_id);
+    js_eventhandler_t *js_eventhandler = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
     switch_memory_pool_t *pool = (js_eventhandler ? js_eventhandler->pool : NULL);
 
     if(!js_eventhandler) {
@@ -366,7 +365,7 @@ static JSValue js_eventhandler_contructor(JSContext *ctx, JSValueConst new_targe
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_eventhandler_class_id);
+    obj = JS_NewObjectProtoClass(ctx, proto, js_eventhandler_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
@@ -398,17 +397,22 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSClassID js_eventhandler_class_get_id() {
-    return js_eventhandler_class_id;
+JSClassID js_eventhandler_get_classid(JSContext *ctx) {
+    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
 }
 
 switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_obj) {
-    JSValue obj_proto;
-    JSValue obj_class;
+    JSClassID class_id = 0;
+    JSValue obj_proto, obj_class;
 
-    if(!js_eventhandler_class_id) {
-        JS_NewClassID(&js_eventhandler_class_id);
-        JS_NewClass(JS_GetRuntime(ctx), js_eventhandler_class_id, &js_eventhandler_class);
+    class_id = js_eventhandler_get_classid(ctx);
+    if(!class_id) {
+        JS_NewClassID(&class_id);
+        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_eventhandler_class);
+
+        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
+        }
     }
 
     obj_proto = JS_NewObject(ctx);
@@ -416,7 +420,7 @@ switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_ob
 
     obj_class = JS_NewCFunction2(ctx, js_eventhandler_contructor, CLASS_NAME, 1, JS_CFUNC_constructor, 0);
     JS_SetConstructor(ctx, obj_class, obj_proto);
-    JS_SetClassProto(ctx, js_eventhandler_class_id, obj_proto);
+    JS_SetClassProto(ctx, class_id, obj_proto);
 
     JS_SetPropertyStr(ctx, global_obj, CLASS_NAME, obj_class);
 
