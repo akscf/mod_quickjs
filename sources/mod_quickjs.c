@@ -305,6 +305,14 @@ out:
     return ret_val;
 }
 
+static JSValue js_is_interrupted(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
+
+    if(!script) {
+        return JS_FALSE;
+    }
+    return (script->fl_interrupt ? JS_TRUE : JS_FALSE);
+}
 
 static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     return js_session_ext_bridge(ctx, this_val, argc, argv);
@@ -596,6 +604,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, script_obj, "id",   JS_NewString(ctx, script->id));
     JS_SetPropertyStr(ctx, script_obj, "name", JS_NewString(ctx, script->name));
     JS_SetPropertyStr(ctx, script_obj, "path", JS_NewString(ctx, script->path));
+    JS_SetPropertyStr(ctx, script_obj, "isInterrupted", JS_NewCFunction(ctx, js_is_interrupted, "isInterrupted", 0));
     JS_SetPropertyStr(ctx, global_obj, "script", script_obj);
 
     /* arguments */
@@ -700,7 +709,8 @@ static void event_handler_shutdown(switch_event_t *event) {
 
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
-    "run  scriptName [args] - launch a new script instance\n"
+    "run  scriptName [args] - launch a new script instance\n" \
+    "int  scriptId - interrupt script\n"
 
 SWITCH_STANDARD_API(quickjs_cmd) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -745,6 +755,22 @@ SWITCH_STANDARD_API(quickjs_cmd) {
         } else {
             stream->write_function(stream, "-ERR: %i\n", status);
         }
+        goto out;
+    }
+    if(strcasecmp(argv[0], "int") == 0) {
+        script_t *script = NULL;
+        char *id = (argc > 1 ? argv[1] : NULL);
+        int success = 0;
+
+        script = script_lookup(id);
+        if(script_sem_take(script)) {
+            if(script->fl_ready && !script->fl_destroyed) {
+                script->fl_interrupt = SWITCH_TRUE;
+                success++;
+            }
+            script_sem_release(script);
+        }
+        stream->write_function(stream, (success ? "+OK\n" : "-ERR: not found\n") );
         goto out;
     }
     goto out;
@@ -859,9 +885,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
         script = (script_t *) hval;
 
         if(script_sem_take(script)) {
-            //
-            //
-            //
+            script->fl_interrupt = SWITCH_TRUE;
             script_sem_release(script);
         }
     }

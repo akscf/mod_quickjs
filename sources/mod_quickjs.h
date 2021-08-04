@@ -20,6 +20,7 @@
 typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
+    uint8_t                 fl_interrupt;
     switch_size_t           script_len;
     uint32_t                sem;
     char                    *id;
