@@ -28,9 +28,7 @@ Brief guide to build and install the module:<br>
 
    - and don't foreger to regenerate Makefile.in after all the changes (run 'automake' from the Freeswitch source root path)<br>
 
-3) example scripts<br>
-   https://github.com/akscf/mod_quickjs/tree/main/sources<br>
-
+3) [example scripts](examples/)
 
 ----<br>
 
