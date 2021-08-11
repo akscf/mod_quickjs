@@ -134,13 +134,13 @@ static JSValue js_eventhandler_add_filter(JSContext *ctx, JSValueConst this_val,
 
     hdr_name = JS_ToCString(ctx, argv[0]);
     if(zstr(hdr_name)) {
-        err = JS_ThrowTypeError(ctx, "Invalid argument: hdrName");
+        err = JS_ThrowTypeError(ctx, "Invalid argument: headerName");
         goto out;
     }
 
     hdr_val = JS_ToCString(ctx, argv[1]);
     if(zstr(hdr_val)) {
-        err = JS_ThrowTypeError(ctx, "Invalid argument: hdrValue");
+        err = JS_ThrowTypeError(ctx, "Invalid argument: headerValue");
         goto out;
     }
 
@@ -172,7 +172,7 @@ static JSValue js_eventhandler_del_filter(JSContext *ctx, JSValueConst this_val,
 
     hdr_name = JS_ToCString(ctx, argv[0]);
     if(zstr(hdr_name)) {
-        err = JS_ThrowTypeError(ctx, "Invalid argument: hdrName");
+        err = JS_ThrowTypeError(ctx, "Invalid argument: headerName");
         goto out;
     }
 

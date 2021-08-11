@@ -1,8 +1,3 @@
-/*
- * example of use session api's:
- *  collectInput, getDigits
- *
- */
 var HANGUP = false;
 
 function hangup_hook(state) {

@@ -223,7 +223,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
     if(zstr(js_tts_name)) {
         ch_tts_name = switch_channel_get_variable(channel, "tts_engine");
         if(zstr(ch_tts_name)) {
-            return JS_ThrowTypeError(ctx, "Invalid argument: TTS Name");
+            return JS_ThrowTypeError(ctx, "Invalid argument: ttsEngine");
         }
     }
 
@@ -232,7 +232,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
          ch_tts_voice = switch_channel_get_variable(channel, "tts_voice");
             if(zstr(ch_tts_name)) {
                 JS_FreeCString(ctx, js_tts_voice);
-                return JS_ThrowTypeError(ctx, "Invalid argument: TTS Voice");
+                return JS_ThrowTypeError(ctx, "Invalid argument: ttlVoice");
             }
     }
 
@@ -240,7 +240,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
     if(zstr(tts_text)) {
         JS_FreeCString(ctx, js_tts_name);
         JS_FreeCString(ctx, js_tts_voice);
-        return JS_ThrowTypeError(ctx, "Invalid argument: TTS Text");
+        return JS_ThrowTypeError(ctx, "Invalid argument: ttsText");
     }
 
     if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
@@ -661,26 +661,6 @@ static JSValue js_session_generate_xml_cdr(JSContext *ctx, JSValueConst this_val
     }
 
     return result;
-}
-
-static JSValue js_session_is_answered(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-
-    if(!jss || !jss->session) {
-        return JS_FALSE;
-    }
-
-    return (switch_channel_test_flag(switch_core_session_get_channel(jss->session), CF_ANSWERED) ? JS_TRUE : JS_FALSE);
-}
-
-static JSValue js_session_is_media_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-
-    if(!jss || !jss->session) {
-        return JS_FALSE;
-    }
-
-    return (switch_channel_media_ready(switch_core_session_get_channel(jss->session)) ? JS_TRUE : JS_FALSE);
 }
 
 static JSValue js_session_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -1168,8 +1148,6 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("frameRead", 1, js_session_frame_read),
     JS_CFUNC_DEF("frameWrite", 1, js_session_frame_write),
     // deprecated
-    JS_CFUNC_DEF("answered", 0, js_session_is_answered),
-    JS_CFUNC_DEF("mediaReady", 0, js_session_is_media_ready),
     JS_CFUNC_DEF("destroy", 0, js_session_destroy),
 };
 

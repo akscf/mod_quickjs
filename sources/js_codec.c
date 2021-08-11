@@ -7,7 +7,7 @@
 #include "mod_quickjs.h"
 
 #define CLASS_NAME              "Codec"
-#define PROP_IS_READY              0
+#define PROP_IS_READY           0
 #define PROP_NAME               1
 #define PROP_PTIME              2
 #define PROP_CHANNELS           3

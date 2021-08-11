@@ -1,3 +1,4 @@
+
 console_log('notice', "script id.....: [" + script.id + "]");
 console_log('notice', "script name...: [" + script.name + "]");
 console_log('notice', "script path...: [" + script.path + "]\n\n");

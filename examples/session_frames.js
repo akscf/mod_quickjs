@@ -1,8 +1,3 @@
-/*
- * example of use session api's:
- *  frameRead, frameWrite and Codec
- *
- */
 var HANGUP = false;
 
 function hangup_hook(state) {

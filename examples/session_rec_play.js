@@ -1,8 +1,3 @@
-/*
- * example of use session api's:
- *  recordFile, streamFile, Filehandle and DTMF callback
- *
- */
 var HANGUP = false;
 
 function hangup_hook(state) {

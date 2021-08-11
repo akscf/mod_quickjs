@@ -49,6 +49,9 @@ static JSValue js_event_add_header(JSContext *ctx, JSValueConst this_val, int ar
     }
 
     hdr_name = JS_ToCString(ctx, argv[0]);
+    if(zstr(hdr_name)) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: headerName");
+    }
     hdr_value = JS_ToCString(ctx, argv[1]);
 
     switch_event_add_header_string(js_event->event, SWITCH_STACK_BOTTOM, hdr_name, hdr_value);
@@ -71,6 +74,9 @@ static JSValue js_event_get_header(JSContext *ctx, JSValueConst this_val, int ar
     }
 
     hdr_name = JS_ToCString(ctx, argv[0]);
+    if(zstr(hdr_name)) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: headerName");
+    }
     val = switch_event_get_header(js_event->event, hdr_name);
 
     JS_FreeCString(ctx, hdr_name);
@@ -178,7 +184,7 @@ static JSClassDef js_event_class = {
 };
 
 static const JSCFunctionListEntry js_event_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("ready", js_event_property_get, js_event_property_set, PROP_READY),
+    JS_CGETSET_MAGIC_DEF("isReady", js_event_property_get, js_event_property_set, PROP_READY),
     //
     JS_CFUNC_DEF("addHeader", 1, js_event_add_header),
     JS_CFUNC_DEF("getHeader", 1, js_event_get_header),

@@ -6,7 +6,7 @@
  **/
 #include "mod_quickjs.h"
 
-#define CLASS_NAME      "FileHandle"
+#define CLASS_NAME          "FileHandle"
 #define FH_PROP_SPEED       0
 #define FH_PROP_VOLUME      1
 #define FH_PROP_CHANNELS    2

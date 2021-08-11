@@ -1,7 +1,3 @@
-/*
- * examples of use File object
- */
-
 //
 // directory i/o
 //
