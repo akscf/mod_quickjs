@@ -2,7 +2,7 @@
  * Sockets (UDP/TCP)
  *
  * Copyright (C) AlexandrinKS
- * https://akscf.me/
+ * https://akscf.org/
  **/
 #include "mod_quickjs.h"
 

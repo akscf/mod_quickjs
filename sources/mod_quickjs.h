@@ -1,6 +1,6 @@
 /**
  * Copyright (C) AlexandrinKS
- * https://akscf.me/
+ * https://akscf.org/
  **/
 #ifndef MOD_QUICKJS_H
 #define MOD_QUICKJS_H
