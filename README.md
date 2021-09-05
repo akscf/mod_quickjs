@@ -20,7 +20,12 @@
     But if you have any suggestions or ideas write me and we can discuss it. <br>
 </p>
 
-
+### ToDo
+ - add playAndGetDigits() in Session 
+ - improvements in CURL (methods to upload/download files and access to extra settings) 
+ - XML support 
+ - ODBC support 
+ 
 ### Related links
  - [Build and installation guide](https://akscf.org/files/mod_quickjs/installation_guide.pdf)
  - [Builitin functions (version 1.0 / ready)](https://akscf.org/files/mod_quickjs/builtin_functions_v10.pdf)
