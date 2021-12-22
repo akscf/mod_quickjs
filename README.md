@@ -21,7 +21,6 @@
 </p>
 
 ### ToDo
- - add playAndGetDigits() in Session 
  - improvements in CURL (methods to upload/download files and access to extra settings) 
  - XML support 
  - ODBC support 

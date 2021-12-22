@@ -388,6 +388,65 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
     return JS_TRUE;
 }
 
+static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    char buf[513] = { 0 };
+    uint32_t buf_len = (sizeof(buf) - 1);
+    uint32_t min_digits = 0, max_digits = 0, max_tries = 0, timeout = 0, digit_timeout = 0;
+    const char *terminators = NULL, *audio_file = NULL, *bad_audio_file = NULL, *digits_regex = NULL, *var_name = NULL, *transfer_on_failure = NULL;
+    char *terminators_ref = NULL;
+    JSValue result;
+
+    SESSION_SANITY_CHECK();
+
+    if(argc < 7) {
+        return JS_ThrowTypeError(ctx, "playAndGetDigits(min_digits, max_digits, max_tries ,timeout, terminators, audio_file, bad_audio_file, [digits_regex, var_name, digit_timeout, transfer_on_failure])");
+    }
+
+    JS_ToUint32(ctx, &min_digits, argv[0]);
+    JS_ToUint32(ctx, &max_digits, argv[1]);
+    JS_ToUint32(ctx, &max_tries, argv[2]);
+    JS_ToUint32(ctx, &timeout, argv[3]);
+
+    terminators = JS_ToCString(ctx, argv[4]);
+    audio_file = JS_ToCString(ctx, argv[5]);
+    bad_audio_file = JS_ToCString(ctx, argv[6]);
+
+    if(argc > 7) {
+        digits_regex = JS_ToCString(ctx, argv[7]);
+    }
+    if(argc > 8) {
+        var_name = JS_ToCString(ctx, argv[8]);
+    }
+    if(argc > 9) {
+        JS_ToUint32(ctx, &digit_timeout, argv[9]);
+    }
+    if(argc > 10) {
+        transfer_on_failure = JS_ToCString(ctx, argv[10]);
+    }
+
+    if(max_digits < min_digits) {
+        max_digits = min_digits;
+    }
+
+    if(timeout <= 1000) {
+        timeout = 1000;
+    }
+
+    terminators_ref = (zstr(terminators_ref) ? "#" : (char *)terminators);
+
+    switch_play_and_get_digits(jss->session, min_digits, max_digits, max_tries, timeout, terminators_ref, audio_file, bad_audio_file, var_name, buf, buf_len, digits_regex, digit_timeout, transfer_on_failure);
+    result = JS_NewString(ctx, (char *) buf);
+
+    JS_FreeCString(ctx, terminators);
+    JS_FreeCString(ctx, audio_file);
+    JS_FreeCString(ctx, bad_audio_file);
+    JS_FreeCString(ctx, var_name);
+    JS_FreeCString(ctx, transfer_on_failure);
+
+    return result;
+}
+
 static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
@@ -1127,6 +1186,7 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("speak", 1, js_session_speak),
     JS_CFUNC_DEF("sayPhrase", 1, js_session_say_phrase),
     JS_CFUNC_DEF("streamFile", 1, js_session_stream_file),
+    JS_CFUNC_DEF("playAndGetDigits", 1, js_session_play_and_get_digits),
     JS_CFUNC_DEF("recordFile", 1, js_session_record_file),
     JS_CFUNC_DEF("collectInput", 1, js_session_collect_input),
     JS_CFUNC_DEF("flushEvents", 1, js_session_flush_events),
