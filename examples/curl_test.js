@@ -3,11 +3,26 @@ console_log('notice', "TEST #1 (simple http get)");
 
 var curl = new CURL('http://127.0.0.1/index.html', 'GET', 10);
 
-console_log('notice', "curl.url...........: [" + curl.url + "]");
-console_log('notice', "curl.method........: [" + curl.method + "]");
-console_log('notice', "curl.timeout.......: [" + curl.timeout + "]");
-console_log('notice', "curl.credentials...: [" + curl.credentials + "]");
-console_log('notice', "curl.contentType...: [" + curl.contentType + "]");
+// with ssl
+// var curl = new CURL('https://127.0.0.1/index.html', 'GET', 10);
+// curl.sslCAcert='catest.pem';
+
+// with proxy
+// curl.proxy='http://192.168.0.1:3128';
+// curl.proxy='https://192.168.0.1:3128';
+// curl.proxyCAcert='catest.pem';
+
+console_log('notice', "curl.url................: [" + curl.url + "]");
+console_log('notice', "curl.method.............: [" + curl.method + "]");
+console_log('notice', "curl.timeout............: [" + curl.timeout + "]");
+console_log('notice', "curl.credentials........: [" + curl.credentials + "]");
+console_log('notice', "curl.contentType........: [" + curl.contentType + "]");
+console_log('notice', "curl.sslCAcert..........: [" + curl.sslCAcert + "]");
+console_log('notice', "curl.sslVerfyPeer.......: [" + curl.sslVerfyPeer + "]");
+console_log('notice', "curl.sslVerfyHost.......: [" + curl.sslVerfyHost + "]");
+console_log('notice', "curl.proxy..............: [" + curl.proxy + "]");
+console_log('notice', "curl.proxyCAcert........: [" + curl.proxyCAcert + "]");
+console_log('notice', "curl.proxyCredentials...: [" + curl.proxyCredentials + "]");
 
 var resp = curl.doRequest();
 if(resp.error) {

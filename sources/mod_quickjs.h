@@ -14,7 +14,8 @@
 #define MOD_VERSION "1.0"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-#define JS_CURL_ENABLE 1
+#define JS_CURL_ENABLE
+//#define JS_CURL_PROXY_SSL_OPTS_ENABLE
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
@@ -165,16 +166,23 @@ typedef struct {
 JSClassID js_eventhandler_get_classid(JSContext *ctx);
 switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_obj);
 
+// cURL
 #ifdef JS_CURL_ENABLE
 typedef struct {
     uint32_t                timeout;
     uint32_t                response_length;
     uint8_t                 fl_ignore_rdata;
+    uint8_t                 fl_ssl_verfypeer;
+    uint8_t                 fl_ssl_verfyhost;
     char                    *url;
+    char                    *proxy;
+    char                    *cacert;
+    char                    *cacert_proxy;
     char                    *method;
     char                    *credentials;
     char                    *content_type;
     char                    *response_buffer;
+    char                    *credentials_proxy;
     switch_memory_pool_t    *pool;
 } js_curl_t;
 JSClassID js_curl_get_classid(JSContext *ctx);

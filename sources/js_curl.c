@@ -1,5 +1,6 @@
 /**
  * Curl
+ * https://curl.se/libcurl/c/curl_easy_setopt.html
  *
  * Copyright (C) AlexandrinKS
  * https://akscf.org/
@@ -8,13 +9,19 @@
 #include "mod_quickjs.h"
 #ifdef JS_CURL_ENABLE
 
-#define CLASS_NAME          "CURL"
-#define PROP_IS_READY       0
-#define PROP_URL            1
-#define PROP_METHOD         2
-#define PROP_TIMEOUT        3
-#define PROP_CREDENTIALS    4
-#define PROP_CONTENT_TYPE   5
+#define CLASS_NAME              "CURL"
+#define PROP_IS_READY           0
+#define PROP_URL                1
+#define PROP_PROXY              2
+#define PROP_METHOD             3
+#define PROP_TIMEOUT            4
+#define PROP_SSL_VERFYPEER      5
+#define PROP_SSL_VERFYHOST      6
+#define PROP_SSL_CACERT         7
+#define PROP_SSL_CACERT_PROXY   8
+#define PROP_CREDENTIALS        9
+#define PROP_REDENTIALS_PROXY   10
+#define PROP_CONTENT_TYPE       11
 
 // application/x-www-form-urlencoded
 #define DEFAULT_CONTENT_TYPE    "application/json"
@@ -32,7 +39,7 @@ static JSValue js_curl_property_get(JSContext *ctx, JSValueConst this_val, int m
 
     if(magic == PROP_IS_READY) {
         uint8_t x = (js_curl != NULL);
-        return (x ? JS_TRUE : JS_FALSE);
+        return(x ? JS_TRUE : JS_FALSE);
     }
 
     if(!js_curl) {
@@ -46,9 +53,39 @@ static JSValue js_curl_property_get(JSContext *ctx, JSValueConst this_val, int m
         case PROP_METHOD: {
             return JS_NewString(ctx, js_curl->method);
         }
+        case PROP_SSL_VERFYPEER: {
+            return(js_curl->fl_ssl_verfypeer ? JS_TRUE : JS_FALSE);
+        }
+        case PROP_SSL_VERFYHOST: {
+            return(js_curl->fl_ssl_verfyhost ? JS_TRUE : JS_FALSE);
+        }
+        case PROP_PROXY: {
+            if(!zstr(js_curl->proxy)) {
+               return JS_NewString(ctx, js_curl->proxy);
+            }
+            return JS_UNDEFINED;
+        }
+        case PROP_SSL_CACERT: {
+            if(!zstr(js_curl->cacert)) {
+               return JS_NewString(ctx, js_curl->cacert);
+            }
+            return JS_UNDEFINED;
+        }
+        case PROP_SSL_CACERT_PROXY: {
+            if(!zstr(js_curl->cacert_proxy)) {
+               return JS_NewString(ctx, js_curl->cacert_proxy);
+            }
+            return JS_UNDEFINED;
+        }
         case PROP_CREDENTIALS: {
             if(!zstr(js_curl->credentials)) {
                return JS_NewString(ctx, js_curl->credentials);
+            }
+            return JS_UNDEFINED;
+        }
+        case PROP_REDENTIALS_PROXY: {
+            if(!zstr(js_curl->credentials_proxy)) {
+               return JS_NewString(ctx, js_curl->credentials_proxy);
             }
             return JS_UNDEFINED;
         }
@@ -69,7 +106,8 @@ static JSValue js_curl_property_get(JSContext *ctx, JSValueConst this_val, int m
 static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     const char *str = NULL;
-    int copy = 1;
+    int copy = 1, success = 1;
+
 
     if(!js_curl) {
         return JS_UNDEFINED;
@@ -84,6 +122,87 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
             }
             JS_FreeCString(ctx, str);
             return JS_TRUE;
+        }
+        case PROP_PROXY: {
+            str = JS_ToCString(ctx, val);
+            if(zstr(str)) {
+                js_curl->proxy = NULL;
+            } else {
+                if(!zstr(js_curl->proxy)) {
+                    copy = strcmp(js_curl->proxy, str);
+                }
+                if(copy) {
+                    js_curl->proxy = switch_core_strdup(js_curl->pool, str);
+                }
+            }
+            JS_FreeCString(ctx, str);
+            return JS_TRUE;
+        }
+        case PROP_SSL_CACERT: {
+            str = JS_ToCString(ctx, val);
+            if(zstr(str)) {
+                js_curl->cacert = NULL;
+            } else {
+                if(switch_file_exists(str, js_curl->pool) != SWITCH_STATUS_SUCCESS) {
+                    char *tfile = NULL;
+                    tfile = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.certs_dir, SWITCH_PATH_SEPARATOR, str);
+
+                    if(switch_file_exists(tfile, js_curl->pool) != SWITCH_STATUS_SUCCESS) {
+                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "File not found: %s\n", tfile);
+                        success = 0;
+                    } else {
+                        if(!zstr(js_curl->cacert)) {
+                            copy = strcmp(js_curl->cacert, tfile);
+                        }
+                        if(copy) {
+                            js_curl->cacert = switch_core_strdup(js_curl->pool, tfile);
+                        }
+                    }
+
+                    switch_safe_free(tfile);
+                } else {
+                    if(!zstr(js_curl->cacert)) {
+                        copy = strcmp(js_curl->cacert, str);
+                    }
+                    if(copy) {
+                        js_curl->cacert = switch_core_strdup(js_curl->pool, str);
+                    }
+                }
+            }
+            return (success ? JS_TRUE : JS_FALSE);
+        }
+        case PROP_SSL_CACERT_PROXY: {
+            str = JS_ToCString(ctx, val);
+            if(zstr(str)) {
+                js_curl->cacert_proxy = NULL;
+            } else {
+                if(switch_file_exists(str, js_curl->pool) != SWITCH_STATUS_SUCCESS) {
+                    char *tfile = NULL;
+                    tfile = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.certs_dir, SWITCH_PATH_SEPARATOR, str);
+
+                    if(switch_file_exists(tfile, js_curl->pool) != SWITCH_STATUS_SUCCESS) {
+                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "File not found: %s\n", tfile);
+                        success = 0;
+                    } else {
+                        if(!zstr(js_curl->cacert_proxy)) {
+                            copy = strcmp(js_curl->cacert_proxy, tfile);
+                        }
+                        if(copy) {
+                            js_curl->cacert_proxy = switch_core_strdup(js_curl->pool, tfile);
+                        }
+                    }
+
+                    switch_safe_free(tfile);
+                } else {
+                    if(!zstr(js_curl->cacert_proxy)) {
+                        copy = strcmp(js_curl->cacert_proxy, str);
+                    }
+                    if(copy) {
+                        js_curl->cacert_proxy = switch_core_strdup(js_curl->pool, str);
+                    }
+                }
+            }
+            return (success ? JS_TRUE : JS_FALSE);
         }
         case PROP_METHOD: {
             str = JS_ToCString(ctx, val);
@@ -109,6 +228,22 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
+        case PROP_REDENTIALS_PROXY: {
+            str = JS_ToCString(ctx, val);
+            if(zstr(str)) {
+                js_curl->credentials_proxy = NULL;
+            } else {
+                if(!zstr(js_curl->credentials_proxy)) {
+                    copy = strcmp(js_curl->credentials_proxy, str);
+                }
+                if(copy) {
+                    js_curl->credentials_proxy = switch_core_strdup(js_curl->pool, str);
+                }
+            }
+            JS_FreeCString(ctx, str);
+            return JS_TRUE;
+        }
+
         case PROP_CONTENT_TYPE: {
             str = JS_ToCString(ctx, val);
             if(zstr(str)) {
@@ -128,6 +263,14 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
             JS_ToUint32(ctx, &js_curl->timeout, val);
             return JS_TRUE;
         }
+        case PROP_SSL_VERFYPEER: {
+            js_curl->fl_ssl_verfypeer = JS_ToBool(ctx, val);
+            return JS_TRUE;
+        }
+        case PROP_SSL_VERFYHOST: {
+            js_curl->fl_ssl_verfyhost = JS_ToBool(ctx, val);
+            return JS_TRUE;
+        }
     }
 
     return JS_FALSE;
@@ -137,6 +280,7 @@ static JSValue js_curl_do_request(JSContext *ctx, JSValueConst this_val, int arg
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     struct curl_slist *headers = NULL;
     switch_CURL *curl_handle = NULL;
+    switch_CURLcode ret_code;
     const char *req_data = NULL;
     char *durl = NULL, *url_p = NULL;
     char ct[128] = "";
@@ -156,8 +300,12 @@ static JSValue js_curl_do_request(JSContext *ctx, JSValueConst this_val, int arg
     }
 
     if(!strncasecmp(js_curl->url, "https", 5)) {
-        switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0);
-        switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0);
+        switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, js_curl->fl_ssl_verfypeer);
+        switch_curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, js_curl->fl_ssl_verfypeer);
+
+        if(!zstr(js_curl->cacert)) {
+            switch_curl_easy_setopt(curl_handle, CURLOPT_CAINFO, js_curl->cacert);
+        }
     }
 
     if(!zstr(js_curl->credentials)) {
@@ -170,6 +318,25 @@ static JSValue js_curl_do_request(JSContext *ctx, JSValueConst this_val, int arg
         headers = curl_slist_append(headers, (char *) ct);
         switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
     }
+
+    if(!zstr(js_curl->proxy)) {
+        if(!zstr(js_curl->credentials_proxy)) {
+            switch_curl_easy_setopt(curl_handle, CURLOPT_PROXYAUTH, CURLAUTH_ANY);
+            switch_curl_easy_setopt(curl_handle, CURLOPT_PROXYUSERPWD, js_curl->credentials_proxy);
+        }
+
+        if(!strncasecmp(js_curl->proxy, "https", 5)) {
+#ifdef JS_CURL_PROXY_SSL_OPTS_ENABLE
+            switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_SSL_VERIFYPEER, 0);
+            if(!zstr(js_curl->cacert_proxy)) {
+                switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_SSL_VERIFYPEER, 1);
+                switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_CAINFO, js_curl->cacert_proxy);
+            }
+#else
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "SSL options disabled! (see JS_CURL_PROXY_SSL_OPTS_ENABLE)\n");
+#endif
+        }
+	}
 
     url_p = js_curl->url;
 
@@ -192,13 +359,21 @@ static JSValue js_curl_do_request(JSContext *ctx, JSValueConst this_val, int arg
     switch_curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *) js_curl);
     switch_curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "freeswitch-curl/1.x");
 
-    switch_curl_easy_perform(curl_handle);
+    ret_code = switch_curl_easy_perform(curl_handle);
+    if(!ret_code) {
+        switch_curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_resp);
+        if(!http_resp) {
+            switch_curl_easy_getinfo(curl_handle, CURLINFO_HTTP_CONNECTCODE, &http_resp);
+        }
+    } else {
+        http_resp = ret_code;
+    }
 
-    switch_curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_resp);
     switch_curl_easy_cleanup(curl_handle);
     curl_slist_free_all(headers);
 
     ret_value = JS_NewObject(ctx);
+
     if(http_resp == 200) {
         JS_SetPropertyStr(ctx, ret_value, "error", JS_NewInt32(ctx, 0));
         if(js_curl->response_length) {
@@ -263,6 +438,12 @@ static const JSCFunctionListEntry js_curl_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("timeout", js_curl_property_get, js_curl_property_set, PROP_TIMEOUT),
     JS_CGETSET_MAGIC_DEF("credentials", js_curl_property_get, js_curl_property_set, PROP_CREDENTIALS),
     JS_CGETSET_MAGIC_DEF("contentType", js_curl_property_get, js_curl_property_set, PROP_CONTENT_TYPE),
+    JS_CGETSET_MAGIC_DEF("sslVerfyPeer", js_curl_property_get, js_curl_property_set, PROP_SSL_VERFYPEER),
+    JS_CGETSET_MAGIC_DEF("sslVerfyHost", js_curl_property_get, js_curl_property_set, PROP_SSL_VERFYHOST),
+    JS_CGETSET_MAGIC_DEF("sslCAcert", js_curl_property_get, js_curl_property_set, PROP_SSL_CACERT),
+    JS_CGETSET_MAGIC_DEF("proxy", js_curl_property_get, js_curl_property_set, PROP_PROXY),
+    JS_CGETSET_MAGIC_DEF("proxyCredentials", js_curl_property_get, js_curl_property_set, PROP_REDENTIALS_PROXY),
+    JS_CGETSET_MAGIC_DEF("proxyCAcert", js_curl_property_get, js_curl_property_set, PROP_SSL_CACERT_PROXY),
     //
     JS_CFUNC_DEF("doRequest", 1, js_curl_do_request),
     JS_CFUNC_DEF("uploadFile", 1, js_curl_upload_file),
