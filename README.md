@@ -21,7 +21,7 @@
 </p>
 
 ### ToDo
- - CURL (methods to upload/download files and access to extra settings) 
+ - CURL (methods to upload/download files) 
  - XML support 
  - ODBC support 
  
