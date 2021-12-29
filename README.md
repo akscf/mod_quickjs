@@ -29,5 +29,5 @@
  - [Build and installation guide](https://akscf.org/files/mod_quickjs/installation_guide.pdf)
  - [Builitin functions (version 1.0 / ready)](https://akscf.org/files/mod_quickjs/builtin_functions_v10.pdf)
  - [Builitin classes (version 1.0 / ready)](https://akscf.org/files/mod_quickjs/builtin_classes_v10.pdf)
- - [Script examples](examples/)
+ - [Scripts examples](examples/)
 
