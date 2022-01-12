@@ -11,9 +11,21 @@
 #include <quickjs.h>
 #include <quickjs-libc.h>
 
+#include <sql.h>
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4201)
+#include <sqlext.h>
+#pragma warning(pop)
+#else
+#include <sqlext.h>
+#endif
+#include <sqltypes.h>
+
 #define MOD_VERSION "1.0"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
+//#define JS_ODBC_ENABLE
 #define JS_CURL_ENABLE
 //#define JS_CURL_PROXY_SSL_OPTS_ENABLE
 
@@ -166,6 +178,15 @@ typedef struct {
 JSClassID js_eventhandler_get_classid(JSContext *ctx);
 switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_obj);
 
+// XML
+typedef struct {
+    //
+    switch_memory_pool_t    *pool;
+    //
+} js_xml_t;
+JSClassID js_xml_get_classid(JSContext *ctx);
+switch_status_t js_xml_class_register(JSContext *ctx, JSValue global_obj);
+
 // cURL
 #ifdef JS_CURL_ENABLE
 typedef struct {
@@ -188,5 +209,22 @@ typedef struct {
 JSClassID js_curl_get_classid(JSContext *ctx);
 switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj);
 #endif // JS_CURL_ENABLE
+
+// ODBC
+#ifdef JS_ODBC_ENABLE
+typedef struct {
+    char                    *dsn;
+    char                    *username;
+    char                    *password;
+    switch_memory_pool_t    *pool;
+    JSContext               *ctx;
+    switch_odbc_handle_t    *db;
+    SQLCHAR                 *colbuf;
+    uint32_t                colbufsz;
+    SQLHSTMT                stmt;
+} js_odbc_t;
+JSClassID js_odbc_get_classid(JSContext *ctx);
+switch_status_t js_odbc_class_register(JSContext *ctx, JSValue global_obj);
+#endif // JS_ODBC_ENABLE
 
 #endif

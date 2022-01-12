@@ -558,9 +558,10 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     char *script_buf_local = NULL;
     char *script_tmp_buff = NULL;
+    uint8_t fl_curl_enable=0, fl_odbc_enable=0;
     JSContext *ctx = NULL;
     JSRuntime *rt = NULL;
-    JSValue global_obj, script_obj, argc_obj, argv_obj;
+    JSValue global_obj, script_obj, argc_obj, argv_obj, flags_obj;
     JSValue result;
 
     if(script->fl_destroyed || globals.fl_shutdown) {
@@ -595,10 +596,21 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_socket_class_register(ctx, global_obj);
     js_coredb_class_register(ctx, global_obj);
     js_eventhandler_class_register(ctx, global_obj);
+    js_xml_class_register(ctx, global_obj);
 #ifdef JS_CURL_ENABLE
     js_curl_class_register(ctx, global_obj);
+    fl_curl_enable = 1;
+#endif
+#ifdef JS_ODBC_ENABLE
+    js_odbc_class_register(ctx, global_obj);
+    fl_odbc_enable = 1;
 #endif
     script->fl_ready = SWITCH_FALSE; /* unset */
+
+    flags_obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, flags_obj, "curlEnabled", JS_NewString(ctx, (fl_curl_enable ? "true" : "false")));
+    JS_SetPropertyStr(ctx, flags_obj, "odbcEnabled", JS_NewString(ctx, (fl_odbc_enable ? "true" : "false")));
+    JS_SetPropertyStr(ctx, global_obj, "flags", flags_obj);
 
     script_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, script_obj, "id",   JS_NewString(ctx, script->id));
