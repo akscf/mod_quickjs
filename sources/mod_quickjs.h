@@ -180,9 +180,8 @@ switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_ob
 
 // XML
 typedef struct {
-    //
-    switch_memory_pool_t    *pool;
-    //
+    uint8_t                 fl_free_xml;
+    switch_xml_t            xml;
 } js_xml_t;
 JSClassID js_xml_get_classid(JSContext *ctx);
 switch_status_t js_xml_class_register(JSContext *ctx, JSValue global_obj);

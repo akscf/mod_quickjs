@@ -1,6 +1,9 @@
+if(flags.curlEnabled != "true") {
+    console_log('err', "CURL disabled");
+    exit();
+}
 
 console_log('notice', "TEST #1 (simple http get)");
-
 var curl = new CURL('http://127.0.0.1/index.html', 'GET', 10);
 
 // with ssl

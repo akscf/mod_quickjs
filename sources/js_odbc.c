@@ -1,4 +1,5 @@
 /**
+ * ODBC
  *
  * Copyright (C) AlexandrinKS
  * https://akscf.org/
@@ -378,7 +379,7 @@ switch_status_t js_odbc_class_register(JSContext *ctx, JSValue global_obj) {
     JSClassID class_id = 0;
     JSValue obj_proto, obj_class;
 
-    class_id = js_coredb_get_classid(ctx);
+    class_id = js_odbc_get_classid(ctx);
     if(!class_id) {
         JS_NewClassID(&class_id);
         JS_NewClass(JS_GetRuntime(ctx), class_id, &js_odbc_class);
