@@ -22,7 +22,7 @@
 
 ### Related links
  - [Build and installation guide](https://akscf.org/files/mod_quickjs/installation_guide.pdf)
- - [Builitin functions (version 1.0 / ready)](https://akscf.org/files/mod_quickjs/builtin_functions_v10.pdf)
- - [Builitin classes (version 1.0 / ready)](https://akscf.org/files/mod_quickjs/builtin_classes_v10.pdf)
+ - [Builitin functions (upd 16.01.2022)](https://akscf.org/files/mod_quickjs/builtin_functions_v10.pdf)
+ - [Builitin classes (upd 16.01.2022)](https://akscf.org/files/mod_quickjs/builtin_classes_v10.pdf)
  - [Scripts examples](examples/)
 
