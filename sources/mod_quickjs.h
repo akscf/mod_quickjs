@@ -25,9 +25,9 @@
 #define MOD_VERSION "1.0"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-//#define JS_ODBC_ENABLE
-#define JS_CURL_ENABLE
-//#define JS_CURL_PROXY_SSL_OPTS_ENABLE
+#define FS_MOD_ENABLE_CURL
+//#define FS_MOD_CURL_PROXY_SSL_OPTS_ENABLE
+//#define FS_MOD_ENABLE_ODBC
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------
 typedef struct {
@@ -49,6 +49,7 @@ typedef struct {
     switch_core_session_t   *session;
     JSContext               *ctx;
     JSRuntime               *rt;
+    void                    *opaque;
 } script_t;
 
 void ctx_dump_error(script_t *script, JSContext *ctx);
@@ -187,7 +188,7 @@ JSClassID js_xml_get_classid(JSContext *ctx);
 switch_status_t js_xml_class_register(JSContext *ctx, JSValue global_obj);
 
 // cURL
-#ifdef JS_CURL_ENABLE
+#ifdef FS_MOD_ENABLE_CURL
 typedef struct {
     uint32_t                timeout;
     uint32_t                response_length;
@@ -207,10 +208,10 @@ typedef struct {
 } js_curl_t;
 JSClassID js_curl_get_classid(JSContext *ctx);
 switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj);
-#endif // JS_CURL_ENABLE
+#endif // FS_MOD_ENABLE_CURL
 
 // ODBC
-#ifdef JS_ODBC_ENABLE
+#ifdef FS_MOD_ENABLE_ODBC
 typedef struct {
     char                    *dsn;
     char                    *username;
@@ -224,6 +225,6 @@ typedef struct {
 } js_odbc_t;
 JSClassID js_odbc_get_classid(JSContext *ctx);
 switch_status_t js_odbc_class_register(JSContext *ctx, JSValue global_obj);
-#endif // JS_ODBC_ENABLE
+#endif // FS_MOD_ENABLE_ODBC
 
 #endif

@@ -6,7 +6,7 @@
  **/
 #include "mod_quickjs.h"
 
-#ifdef JS_ODBC_ENABLE
+#ifdef FS_MOD_ENABLE_ODBC
 
 #define CLASS_NAME              "ODBC"
 #define PROP_DSN                0
@@ -401,5 +401,5 @@ switch_status_t js_odbc_class_register(JSContext *ctx, JSValue global_obj) {
     return SWITCH_STATUS_SUCCESS;
 }
 
-#endif // JS_ODBC_ENABLE
+#endif // FS_MOD_ENABLE_ODBC
 

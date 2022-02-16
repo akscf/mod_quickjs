@@ -7,7 +7,7 @@
  **/
 
 #include "mod_quickjs.h"
-#ifdef JS_CURL_ENABLE
+#ifdef FS_MOD_ENABLE_CURL
 
 #define CLASS_NAME              "CURL"
 #define PROP_IS_READY           0
@@ -326,14 +326,14 @@ static JSValue js_curl_do_request(JSContext *ctx, JSValueConst this_val, int arg
         }
 
         if(!strncasecmp(js_curl->proxy, "https", 5)) {
-#ifdef JS_CURL_PROXY_SSL_OPTS_ENABLE
+#ifdef FS_MOD_CURL_PROXY_SSL_OPTS_ENABLE
             switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_SSL_VERIFYPEER, 0);
             if(!zstr(js_curl->cacert_proxy)) {
                 switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_SSL_VERIFYPEER, 1);
                 switch_curl_easy_setopt(curl_handle, CURLOPT_PROXY_CAINFO, js_curl->cacert_proxy);
             }
 #else
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "SSL options disabled! (see JS_CURL_PROXY_SSL_OPTS_ENABLE)\n");
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "SSL options disabled! (see FS_MOD_CURL_PROXY_SSL_OPTS_ENABLE)\n");
 #endif
         }
 	}
@@ -594,4 +594,4 @@ switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj) {
     return SWITCH_STATUS_SUCCESS;
 }
 
-#endif // JS_CURL_ENABLE
+#endif // FS_MOD_ENABLE_CURL

@@ -481,6 +481,9 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     char *script_args_local = NULL;
     switch_memory_pool_t *pool = NULL;
     script_t *script = NULL;
+#ifdef PERF_MON_ENABLE
+    clock_t pfm_t0=0, pfm_t1=0;
+#endif
 
     if(zstr(script_name)) {
         status = SWITCH_STATUS_FALSE;
@@ -525,11 +528,18 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     switch_mutex_init(&script->mutex, SWITCH_MUTEX_NESTED, pool);
     switch_mutex_init(&script->mutex_classes_map, SWITCH_MUTEX_NESTED, pool);
 
+#ifdef PERF_MON_ENABLE
+    pfm_t0 = clock();
+#endif
     status = script_load(script);
     if(status != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't load script\n");
         goto out;
     }
+#ifdef PERF_MON_ENABLE
+    pfm_t1 = clock();
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Script load time: %f sec\n", (double)(pfm_t1 - pfm_t0) / CLOCKS_PER_SEC);
+#endif
 
     switch_mutex_lock(globals.mutex_scripts_map);
     switch_core_hash_insert(globals.scripts_map, script->id, script);
@@ -597,11 +607,11 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_coredb_class_register(ctx, global_obj);
     js_eventhandler_class_register(ctx, global_obj);
     js_xml_class_register(ctx, global_obj);
-#ifdef JS_CURL_ENABLE
+#ifdef FS_MOD_ENABLE_CURL
     js_curl_class_register(ctx, global_obj);
     fl_curl_enable = 1;
 #endif
-#ifdef JS_ODBC_ENABLE
+#ifdef FS_MOD_ENABLE_ODBC
     js_odbc_class_register(ctx, global_obj);
     fl_odbc_enable = 1;
 #endif
@@ -722,8 +732,8 @@ static void event_handler_shutdown(switch_event_t *event) {
 
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
-    "run  scriptName [args] - launch a new script instance\n" \
-    "int  scriptId - interrupt script\n"
+    "run   scriptName [args] - launch the script instance\n" \
+    "int   scriptId - interrupt script\n"
 
 SWITCH_STANDARD_API(quickjs_cmd) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
