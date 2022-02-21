@@ -20,6 +20,10 @@
     But if you have any suggestions or ideas write me and we can discuss it. <br>
 </p>
 
+### Version
+    1.1 added threads features (unstable! don't use this version for operation!)
+    1.0 latest stable version
+
 ### Related links
  - [Build and installation guide](https://akscf.org/files/mod_quickjs/installation_guide.pdf)
  - [Builitin functions (upd 16.01.2022)](https://akscf.org/files/mod_quickjs/builtin_functions_v10.pdf)

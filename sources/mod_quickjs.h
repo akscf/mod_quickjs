@@ -22,7 +22,7 @@
 #endif
 #include <sqltypes.h>
 
-#define MOD_VERSION "1.0"
+#define MOD_VERSION "1.1"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 #define FS_MOD_ENABLE_CURL
@@ -33,8 +33,10 @@
 typedef struct {
     uint8_t                 fl_ready;
     uint8_t                 fl_destroyed;
-    uint8_t                 fl_interrupt;
+    uint8_t                 fl_interrupted;
     switch_size_t           script_len;
+    uint32_t                threads_active;
+    uint32_t                thread_last_id;
     uint32_t                sem;
     char                    *id;
     char                    *name;
@@ -45,7 +47,9 @@ typedef struct {
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
     switch_mutex_t          *mutex_classes_map;
+    switch_mutex_t          *mutex_threads_map;
     switch_hash_t           *classes_map;
+    switch_inthash_t        *threads_map;
     switch_core_session_t   *session;
     JSContext               *ctx;
     JSRuntime               *rt;
@@ -187,6 +191,25 @@ typedef struct {
 JSClassID js_xml_get_classid(JSContext *ctx);
 switch_status_t js_xml_class_register(JSContext *ctx, JSValue global_obj);
 
+// Thread
+typedef struct {
+    uint8_t                 fl_ready;
+    uint8_t                 fl_destroyed;
+    uint8_t                 fl_interrupted;
+    uint32_t                id;
+    uint32_t                refs;
+    switch_memory_pool_t    *pool;
+    switch_mutex_t          *mutex;
+    script_t                *script;
+    JSContext               *ctx;
+    JSValue                 fn;
+    JSValue                 arg;
+    JSValue                 tobj;
+} js_thread_t;
+JSClassID js_thread_get_classid(JSContext *ctx);
+switch_status_t js_thread_class_register(JSContext *ctx, JSValue global_obj);
+JSValue js_thread_object_create(JSContext *ctx, js_thread_t *thread);
+
 // cURL
 #ifdef FS_MOD_ENABLE_CURL
 typedef struct {
@@ -226,5 +249,11 @@ typedef struct {
 JSClassID js_odbc_get_classid(JSContext *ctx);
 switch_status_t js_odbc_class_register(JSContext *ctx, JSValue global_obj);
 #endif // FS_MOD_ENABLE_ODBC
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------
+void launch_thread(switch_memory_pool_t *pool, switch_thread_start_t fun, void *data);
+js_thread_t *js_thread_lookup(JSContext *ctx, uint32_t id);
+int  js_thread_sem_take(js_thread_t *js_thread);
+void js_thread_sem_release(js_thread_t *js_thread);
 
 #endif
