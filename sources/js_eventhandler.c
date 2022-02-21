@@ -344,7 +344,7 @@ static JSValue js_eventhandler_contructor(JSContext *ctx, JSValueConst new_targe
     switch_memory_pool_t *pool = NULL;
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Pool failure\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
         goto fail;
     }
 

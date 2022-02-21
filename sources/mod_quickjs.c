@@ -8,6 +8,8 @@ static struct {
     switch_mutex_t          *mutex;
     switch_mutex_t          *mutex_scripts_map;
     switch_hash_t           *scripts_map;
+    size_t                  cfg_rt_mem_limit;
+    size_t                  cfg_rt_stk_size;
     uint8_t                 fl_ready;
     uint8_t                 fl_shutdown;
     int                     active_threads;
@@ -264,7 +266,7 @@ static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Pool failure\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
         goto out;
     }
 
@@ -481,9 +483,6 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     char *script_args_local = NULL;
     switch_memory_pool_t *pool = NULL;
     script_t *script = NULL;
-#ifdef PERF_MON_ENABLE
-    clock_t pfm_t0=0, pfm_t1=0;
-#endif
 
     if(zstr(script_name)) {
         status = SWITCH_STATUS_FALSE;
@@ -528,18 +527,11 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     switch_mutex_init(&script->mutex, SWITCH_MUTEX_NESTED, pool);
     switch_mutex_init(&script->mutex_classes_map, SWITCH_MUTEX_NESTED, pool);
 
-#ifdef PERF_MON_ENABLE
-    pfm_t0 = clock();
-#endif
     status = script_load(script);
     if(status != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't load script\n");
         goto out;
     }
-#ifdef PERF_MON_ENABLE
-    pfm_t1 = clock();
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Script load time: %f sec\n", (double)(pfm_t1 - pfm_t0) / CLOCKS_PER_SEC);
-#endif
 
     switch_mutex_lock(globals.mutex_scripts_map);
     switch_core_hash_insert(globals.scripts_map, script->id, script);
@@ -586,6 +578,14 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create jsCtx\n");
         goto out;
     }
+
+    if(globals.cfg_rt_mem_limit) {
+        JS_SetMemoryLimit(rt, globals.cfg_rt_mem_limit);
+    }
+    if(globals.cfg_rt_stk_size) {
+        JS_SetMaxStackSize(rt, globals.cfg_rt_stk_size);
+    }
+
     script->rt = rt;
     script->ctx = ctx;
 
@@ -847,6 +847,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     switch_mutex_init(&globals.mutex, SWITCH_MUTEX_NESTED, pool);
     switch_mutex_init(&globals.mutex_scripts_map, SWITCH_MUTEX_NESTED, pool);
 
+    globals.cfg_rt_mem_limit = 0;
+    globals.cfg_rt_mem_limit = 0;
+
     /* xml config */
     if((xml = switch_xml_open_cfg(CONFIG_NAME, &cfg, NULL)) == NULL) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't open: %s\n", CONFIG_NAME);
@@ -856,6 +859,15 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
         for(xml_param = switch_xml_child(xml_settings, "param"); xml_param; xml_param = xml_param->next) {
             char *var = (char *) switch_xml_attr_soft(xml_param, "name");
             char *val = (char *) switch_xml_attr_soft(xml_param, "value");
+
+	    if(!strcasecmp(var, "rt-stack-size-max")) {
+                size_t x = atoi(val);
+                if(x > 0) { globals.cfg_rt_stk_size = x * 1024 * 1024; }
+            }
+            if(!strcasecmp(var, "rt-memory-limit")) {
+                size_t x = atoi(val);
+                if(x > 0) { globals.cfg_rt_mem_limit = x * 1024 * 1024; }
+            }
         }
     }
     if((xml_scripts = switch_xml_child(cfg, "autoload-scripts"))) {

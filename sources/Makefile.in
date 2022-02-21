@@ -583,7 +583,7 @@ DEFAULT_ARGS = --build=$(build) --host=$(host) --target=$(target) --prefix="$(pr
 moddir = @modulesdir@
 MODNAME = mod_quickjs
 mod_LTLIBRARIES = mod_quickjs.la
-mod_quickjs_la_SOURCES = mod_quickjs.c js_session.c js_dtmf.c js_event.c js_filehandle.c js_file.c js_socket.c js_coredb.c js_eventhandler.c js_curl.c js_odbc.c js_xml.c js_worker.c
+mod_quickjs_la_SOURCES = mod_quickjs.c js_session.c js_dtmf.c js_event.c js_filehandle.c js_file.c js_socket.c js_coredb.c js_eventhandler.c js_curl.c js_odbc.c js_xml.c
 mod_quickjs_la_CFLAGS = $(AM_CFLAGS) -I/opt/quickjs/include/quickjs -I. -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-label -Wno-declaration-after-statement -Wno-pedantic
 mod_quickjs_la_LIBADD = $(switch_builddir)/libfreeswitch.la /opt/quickjs/lib/quickjs/libquickjs.lto.a
 mod_quickjs_la_LDFLAGS = -avoid-version -module -no-undefined -shared
@@ -678,7 +678,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-mod_quickjs.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-js_odbc.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-js_xml.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mod_quickjs_la-js_worker.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -794,13 +793,6 @@ mod_quickjs_la-js_xml.lo: js_xml.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@       $(AM_V_CC)source='js_xml.c' object='mod_quickjs_la-js_xml.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@       DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@   $(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -c -o mod_quickjs_la-js_xml.lo `test -f 'js_xml.c' || echo '$(srcdir)/'`js_xml.c
-
-mod_quickjs_la-js_worker.lo: js_worker.c
-@am__fastdepCC_TRUE@    $(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -MT mod_quickjs_la-js_worker.lo -MD -MP -MF $(DEPDIR)/mod_quickjs_la-js_worker.Tpo -c -o mod_quickj
-@am__fastdepCC_TRUE@    $(AM_V_at)$(am__mv) $(DEPDIR)/mod_quickjs_la-js_worker.Tpo $(DEPDIR)/mod_quickjs_la-js_worker.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@       $(AM_V_CC)source='js_worker.c' object='mod_quickjs_la-js_worker.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@       DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@   $(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(mod_quickjs_la_CFLAGS) $(CFLAGS) -c -o mod_quickjs_la-js_worker.lo `test -f 'js_worker.c' || echo '$(srcdir)/'`js_worker.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

@@ -286,7 +286,7 @@ static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int 
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Pool failure\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
         goto fail;
     }
 
