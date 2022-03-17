@@ -14,7 +14,6 @@
 </p>
 
 ### Version
-    1.x latest stable version
     2.x with threads support (unstable!)
 
 ### Related links
