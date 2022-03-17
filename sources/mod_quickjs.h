@@ -22,7 +22,7 @@
 #endif
 #include <sqltypes.h>
 
-#define MOD_VERSION "1.0"
+#define MOD_VERSION "1.1"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 #define FS_MOD_ENABLE_CURL
