@@ -1,8 +1,8 @@
 <configuration name="quickjs.conf" description="">
     <settings>
-	<!-- mbytes (0 - no limits) -->
-	<param name="rt-memory-limit" value="0" />
-	<param name="rt-stack-size-max" value="0" />
+        <!-- mbytes (0 - no limits) -->
+        <param name="rt-memory-limit" value="0" />
+        <param name="rt-stack-size-max" value="0" />
     </settings>
 
     <autoload-scripts>
