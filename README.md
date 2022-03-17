@@ -14,8 +14,8 @@
 </p>
 
 ### Version
-    1.1 added threads features (unstable! don't use this version for operation!)
-    1.0 latest stable version
+    1.x latest stable version
+    2.x with threads support (unstable!)
 
 ### Related links
  - [Build and installation guide](http://akscf.org/files/mod_quickjs/installation_guide.pdf)
