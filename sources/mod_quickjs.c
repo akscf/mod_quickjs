@@ -12,7 +12,7 @@ static struct {
     size_t                  cfg_rt_stk_size;
     uint8_t                 fl_ready;
     uint8_t                 fl_shutdown;
-    uint32_t                active_threads;
+    int                     active_threads;
 } globals;
 
 SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load);
@@ -20,8 +20,6 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown);
 SWITCH_MODULE_DEFINITION(mod_quickjs, mod_quickjs_load, mod_quickjs_shutdown, NULL);
 
 static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj);
-static void *SWITCH_THREAD_FUNC js_spawn_thread(switch_thread_t *thread, void *obj);
-
 static script_t *script_lookup(char *id);
 static uint32_t script_sem_take(script_t *script);
 static void script_sem_release(script_t *script);
@@ -315,81 +313,11 @@ static JSValue js_is_interrupted(JSContext *ctx, JSValueConst this_val, int argc
     if(!script) {
         return JS_FALSE;
     }
-    return (script->fl_interrupted ? JS_TRUE : JS_FALSE);
+    return (script->fl_interrupt ? JS_TRUE : JS_FALSE);
 }
 
 static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     return js_session_ext_bridge(ctx, this_val, argc, argv);
-}
-
-static JSValue js_spawn(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    script_t *script = NULL;
-    switch_memory_pool_t *pool = NULL;
-    js_thread_t *js_thread = NULL;
-    JSValue obj = JS_UNDEFINED;
-
-    script = JS_GetContextOpaque(ctx);
-    if(!script) { return JS_ThrowTypeError(ctx, "Invalid ctx"); }
-
-    if(argc < 1) {
-        return JS_FALSE;
-    }
-
-    if(JS_IsFunction(ctx, argv[0])) {
-        if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
-            goto fail;
-        }
-        if((js_thread = switch_core_alloc(pool, sizeof(js_thread_t))) == NULL) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-            goto fail;
-        }
-
-        js_thread->ctx = JS_NewContext(JS_GetRuntime(ctx));
-        if(!js_thread->ctx) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't create ctx\n");
-            goto fail;
-        }
-
-        switch_mutex_lock(script->mutex);
-        js_thread->id = script->thread_last_id++;
-        switch_mutex_unlock(script->mutex);
-
-        switch_mutex_init(&js_thread->mutex, SWITCH_MUTEX_NESTED, pool);
-
-        js_thread->refs = 0;
-        js_thread->pool = pool;
-        js_thread->script = script;
-        js_thread->arg = (argc > 1 ? JS_DupValue(ctx, argv[1]) : JS_UNDEFINED);
-        js_thread->fn = JS_DupValue(ctx, argv[0]);
-
-        obj = js_thread_object_create(ctx, js_thread);
-        if(JS_IsException(obj)) { goto fail; }
-        js_thread->tobj = JS_DupValue(ctx, obj);
-
-        switch_mutex_lock(script->mutex_threads_map);
-        switch_core_inthash_insert(script->threads_map, js_thread->id, js_thread);
-        switch_mutex_unlock(script->mutex_threads_map);
-
-        switch_mutex_lock(script->mutex);
-        script->threads_active++;
-        switch_mutex_unlock(script->mutex);
-
-        js_thread->fl_ready = SWITCH_TRUE;
-        launch_thread(pool, js_spawn_thread, js_thread);
-
-        return obj;
-    }
-fail:
-    JS_FreeValue(ctx, obj);
-
-    if(js_thread->ctx) {
-        JS_FreeContext(js_thread->ctx);
-    }
-    if(pool) {
-        switch_core_destroy_memory_pool(&pool);
-    }
-    return JS_FALSE;
 }
 
 switch_status_t js_register_classid(JSRuntime *rt, const char *class_name, JSClassID class_id) {
@@ -430,6 +358,7 @@ JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name) {
     script = JS_GetRuntimeOpaque(rt);
     switch_assert(script);
 
+
     if(script_sem_take(script)) {
         switch_mutex_lock(script->mutex_classes_map);
         ptr = switch_core_hash_find(script->classes_map, class_name);
@@ -460,49 +389,6 @@ void launch_thread(switch_memory_pool_t *pool, switch_thread_start_t fun, void *
     return;
 }
 
-/* lookup and take sem */
-js_thread_t *js_thread_lookup(JSContext *ctx, uint32_t id) {
-    js_thread_t *js_thread = NULL;
-    script_t *script = NULL;
-    uint8_t success = 0;
-
-    script = JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
-    switch_assert(script);
-
-    if(script_sem_take(script)) {
-        switch_mutex_lock(script->mutex_threads_map);
-        js_thread = switch_core_inthash_find(script->threads_map, id);
-        if(js_thread && js_thread->fl_ready) {
-            switch_mutex_lock(js_thread->mutex);
-            js_thread->refs++;
-            switch_mutex_unlock(js_thread->mutex);
-            success = 1;
-        }
-        switch_mutex_unlock(script->mutex_threads_map);
-        script_sem_release(script);
-    }
-    return (success ? js_thread : NULL);
-}
-
-int js_thread_sem_take(js_thread_t *js_thread) {
-    if(js_thread && js_thread->fl_ready) {
-        switch_mutex_lock(js_thread->mutex);
-        js_thread->refs++;
-        switch_mutex_unlock(js_thread->mutex);
-        return 1;
-    }
-    return 0;
-}
-
-void js_thread_sem_release(js_thread_t *js_thread) {
-    if(js_thread && js_thread->fl_ready) {
-        switch_mutex_lock(js_thread->mutex);
-        if(js_thread->refs > 0) js_thread->refs--;
-        switch_mutex_unlock(js_thread->mutex);
-    }
-}
-
-// ---------------------------------------------------------------------------------------------------------------------------------------------
 static switch_status_t new_uuid(char **uuid, switch_memory_pool_t *pool) {
     char uuid_str[SWITCH_UUID_FORMATTED_LENGTH + 1];
 
@@ -568,17 +454,19 @@ static switch_status_t script_load(script_t *script) {
     script->script_len = switch_file_get_size(fd);
     if(!script->script_len) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Script file is empty: %s\n", script->path);
-	switch_goto_status(SWITCH_STATUS_FALSE, out);
+        status = SWITCH_STATUS_FALSE;
+        goto out;
     }
 
     if((script->script_buf = switch_core_alloc(script->pool, script->script_len + 1)) == NULL)  {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-	switch_goto_status(SWITCH_STATUS_MEMERR, out);
+        status = SWITCH_STATUS_MEMERR;
+        goto out;
     }
 
     if(switch_file_read(fd, script->script_buf, &script->script_len) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't read file\n");
-	switch_goto_status(SWITCH_STATUS_FALSE, out);
+        return SWITCH_STATUS_GENERR;
     }
 
     script->script_buf[script->script_len] = '\0';
@@ -626,11 +514,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         goto out;
     }
 
-    if(session) {
-        script->id = switch_core_strdup(pool, switch_core_session_get_uuid(session));
-    } else {
-        new_uuid(&script->id, pool);
-    }
+    new_uuid(&script->id, pool);
 
     script->pool = pool;
     script->path = switch_core_strdup(pool, script_path_local);
@@ -640,10 +524,8 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     script->session = session;
 
     switch_core_hash_init(&script->classes_map);
-    switch_core_inthash_init(&script->threads_map);
     switch_mutex_init(&script->mutex, SWITCH_MUTEX_NESTED, pool);
     switch_mutex_init(&script->mutex_classes_map, SWITCH_MUTEX_NESTED, pool);
-    switch_mutex_init(&script->mutex_threads_map, SWITCH_MUTEX_NESTED, pool);
 
     status = script_load(script);
     if(status != SWITCH_STATUS_SUCCESS) {
@@ -672,75 +554,6 @@ out:
     return status;
 }
 
-static void *SWITCH_THREAD_FUNC js_spawn_thread(switch_thread_t *thread, void *obj) {
-    volatile js_thread_t *_ref = (js_thread_t *) obj;
-    js_thread_t *js_thread = (js_thread_t *) _ref;
-    script_t *script = js_thread->script;
-    switch_memory_pool_t *pool = js_thread->pool;
-    JSContext *ctx = js_thread->ctx;
-    JSValue fn = js_thread->fn;
-    uint32_t thread_id = js_thread->id;
-    uint32_t dlock_cnt = 0;
-    JSValue result;
-    JSValue args[2];
-
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "thread [%u] stated\n", thread_id);
-
-    JS_SetContextOpaque(ctx, script);
-
-    args[0] = js_thread->tobj;   // thread info
-    args[1] = js_thread->arg;    // spawn args
-
-    result = JS_Call(ctx, fn, JS_UNDEFINED, 2, (JSValueConst *)args);
-    if(JS_IsException(result)) {
-        ctx_dump_error(script, ctx);
-        JS_ResetUncatchableError(ctx);
-    }
-out:
-    JS_FreeValue(ctx, result);
-    JS_FreeValue(ctx, fn);
-    JS_FreeValue(ctx, args[0]);
-    JS_FreeValue(ctx, args[1]);
-
-    js_thread->fl_ready = SWITCH_FALSE;
-    js_thread->fl_destroyed = SWITCH_TRUE;
-
-    if(js_thread->refs) {
-        switch_yield(100000);
-        dlock_cnt++;
-        if(dlock_cnt > 100) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "thread [%s/%u] has '%u' active references!\n", script->name, js_thread->id, js_thread->refs);
-            dlock_cnt = 0;
-        }
-    }
-
-    if(script) {
-        switch_mutex_lock(script->mutex_threads_map);
-        switch_core_inthash_delete(script->threads_map, thread_id);
-        switch_mutex_unlock(script->mutex_threads_map);
-
-        switch_mutex_lock(script->mutex);
-        if(script->threads_active > 0) script->threads_active--;
-        switch_mutex_unlock(script->mutex);
-    }
-
-    if(ctx) {
-        JS_FreeContext(ctx);
-    }
-
-    if(pool) {
-        switch_core_destroy_memory_pool(&pool);
-    }
-
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "thread [%u] finished\n", thread_id);
-
-    switch_mutex_lock(globals.mutex);
-    if(globals.active_threads > 0) globals.active_threads--;
-    switch_mutex_unlock(globals.mutex);
-
-    return NULL;
-}
-
 static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj) {
     volatile script_t *_ref = (script_t *) obj;
     script_t *script = (script_t *) _ref;
@@ -748,8 +561,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     char *script_buf_local = NULL;
     char *script_tmp_buff = NULL;
     uint8_t fl_curl_enable=0, fl_odbc_enable=0;
-    uint32_t threads_dlock_cnt = 0;
-    switch_hash_index_t *hidx = NULL;
     JSContext *ctx = NULL;
     JSRuntime *rt = NULL;
     JSValue global_obj, script_obj, argc_obj, argv_obj, flags_obj;
@@ -796,7 +607,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_coredb_class_register(ctx, global_obj);
     js_eventhandler_class_register(ctx, global_obj);
     js_xml_class_register(ctx, global_obj);
-    js_thread_class_register(ctx, global_obj);
 #ifdef FS_MOD_ENABLE_CURL
     js_curl_class_register(ctx, global_obj);
     fl_curl_enable = 1;
@@ -851,7 +661,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
-    JS_SetPropertyStr(ctx, global_obj, "spawn", JS_NewCFunction(ctx, js_spawn, "spawn", 1));
 
     if(script->session) {
         uint32_t clen = 0;
@@ -904,32 +713,6 @@ out:
     switch_core_hash_delete(globals.scripts_map, script->id);
     switch_mutex_unlock(globals.mutex_scripts_map);
 
-    // stop threads
-    if(script->threads_active) {
-        switch_mutex_lock(script->mutex_threads_map);
-        for(hidx = switch_core_hash_first_iter(script->threads_map, hidx); hidx; hidx = switch_core_hash_next(&hidx)) {
-            js_thread_t *js_thread = NULL; void *hval = NULL;
-
-            switch_core_hash_this(hidx, NULL, NULL, &hval);
-            js_thread = (js_thread_t *) hval;
-
-            if(js_thread && !js_thread->fl_destroyed) {
-                js_thread->fl_interrupted = SWITCH_TRUE;
-            }
-        }
-        switch_mutex_unlock(script->mutex_threads_map);
-    }
-
-    while(script->threads_active) {
-        switch_yield(100000);
-        threads_dlock_cnt++;
-        if(threads_dlock_cnt > 100) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "%s: Still active '%i' threads!\n", script->name, script->threads_active);
-            threads_dlock_cnt = 0;
-        }
-    }
-
-    switch_core_inthash_destroy(&script->threads_map);
     switch_core_hash_destroy(&script->classes_map);
     switch_core_destroy_memory_pool(&script->pool);
 
@@ -950,8 +733,7 @@ static void event_handler_shutdown(switch_event_t *event) {
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
     "run   scriptName [args] - launch the script instance\n" \
-    "int   scriptId - interrupt script\n" \
-    "int   scriptId threadId - interrupt thread\n"
+    "int   scriptId - interrupt script\n"
 
 SWITCH_STANDARD_API(quickjs_cmd) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -979,10 +761,7 @@ SWITCH_STANDARD_API(quickjs_cmd) {
                 script = (script_t *)hval;
 
                 if(script_sem_take(script)) {
-                    stream->write_function(stream, "%s (%s) [threads: %u, session: %s]\n",
-                            script->id, script->path, script->threads_active,
-                            (script->session_id ? script->session_id : "none")
-                    );
+                    stream->write_function(stream, "%s (%s) [session: %s]\n", script->id, script->path, (script->session_id ? script->session_id : "none"));
                     script_sem_release(script);
                 }
             }
@@ -1003,25 +782,14 @@ SWITCH_STANDARD_API(quickjs_cmd) {
     }
     if(strcasecmp(argv[0], "int") == 0) {
         script_t *script = NULL;
-        js_thread_t *js_thread = NULL;
-        char *sid = (argc > 1 ? argv[1] : NULL);
-        char *tid = (argc > 2 ? argv[2] : NULL);
+        char *id = (argc > 1 ? argv[1] : NULL);
         int success = 0;
 
-        script = script_lookup(sid);
+        script = script_lookup(id);
         if(script_sem_take(script)) {
             if(script->fl_ready && !script->fl_destroyed) {
-                if(!tid) {
-                    script->fl_interrupted = SWITCH_TRUE;
-                    success++;
-                } else {
-                    js_thread = js_thread_lookup(script->ctx, atol(tid));
-                    if(js_thread) {
-                        js_thread->fl_interrupted = SWITCH_TRUE;
-                        js_thread_sem_release(js_thread);
-                        success++;
-                    }
-                }
+                script->fl_interrupt = SWITCH_TRUE;
+                success++;
             }
             script_sem_release(script);
         }
@@ -1092,7 +860,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
             char *var = (char *) switch_xml_attr_soft(xml_param, "name");
             char *val = (char *) switch_xml_attr_soft(xml_param, "value");
 
-            if(!strcasecmp(var, "rt-stack-size-max")) {
+	    if(!strcasecmp(var, "rt-stack-size-max")) {
                 size_t x = atoi(val);
                 if(x > 0) { globals.cfg_rt_stk_size = x * 1024 * 1024; }
             }
@@ -1152,7 +920,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
         script = (script_t *) hval;
 
         if(script_sem_take(script)) {
-            script->fl_interrupted = SWITCH_TRUE;
+            script->fl_interrupt = SWITCH_TRUE;
             script_sem_release(script);
         }
     }
