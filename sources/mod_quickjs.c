@@ -454,19 +454,17 @@ static switch_status_t script_load(script_t *script) {
     script->script_len = switch_file_get_size(fd);
     if(!script->script_len) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Script file is empty: %s\n", script->path);
-        status = SWITCH_STATUS_FALSE;
-        goto out;
+	switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
     if((script->script_buf = switch_core_alloc(script->pool, script->script_len + 1)) == NULL)  {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-        status = SWITCH_STATUS_MEMERR;
-        goto out;
+	switch_goto_status(SWITCH_STATUS_MEMERR, out);
     }
 
     if(switch_file_read(fd, script->script_buf, &script->script_len) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't read file\n");
-        return SWITCH_STATUS_GENERR;
+	switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
     script->script_buf[script->script_len] = '\0';
