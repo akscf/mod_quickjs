@@ -169,6 +169,7 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
                     }
                 }
             }
+	    JS_FreeCString(ctx, str);
             return (success ? JS_TRUE : JS_FALSE);
         }
         case PROP_SSL_CACERT_PROXY: {
@@ -202,6 +203,7 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
                     }
                 }
             }
+	    JS_FreeCString(ctx, str);
             return (success ? JS_TRUE : JS_FALSE);
         }
         case PROP_METHOD: {
