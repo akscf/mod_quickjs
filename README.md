@@ -10,12 +10,7 @@
      <li>threads support (in a development branch)</li>
     </ul>
     <br>    
-    If you have any suggestions or ideas write me.
 </p>
-
-### Version
-    1.0 latest stable release
-    2.x with threads support (unstable!)
 
 ### Related links
  - [Build and installation guide](http://akscf.org/files/mod_quickjs/installation_guide.pdf)
