@@ -1,10 +1,8 @@
 /**
- * EventHandler
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_eventhandler.h"
 
 #define CLASS_NAME      "EventHandler"
 #define PROP_IS_READY   0
@@ -129,20 +127,20 @@ static JSValue js_eventhandler_add_filter(JSContext *ctx, JSValueConst this_val,
     EH_SANITY_CHECK();
 
     if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    hdr_name = JS_ToCString(ctx, argv[0]);
-    if(zstr(hdr_name)) {
+    if(QJS_IS_NULL(argv[0])) {
         err = JS_ThrowTypeError(ctx, "Invalid argument: headerName");
         goto out;
     }
-
-    hdr_val = JS_ToCString(ctx, argv[1]);
-    if(zstr(hdr_val)) {
+    if(QJS_IS_NULL(argv[1])) {
         err = JS_ThrowTypeError(ctx, "Invalid argument: headerValue");
         goto out;
     }
+
+    hdr_name = JS_ToCString(ctx, argv[0]);
+    hdr_val = JS_ToCString(ctx, argv[1]);
 
     switch_mutex_lock(js_eventhandler->mutex);
 
@@ -167,14 +165,14 @@ static JSValue js_eventhandler_del_filter(JSContext *ctx, JSValueConst this_val,
     EH_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        err = JS_ThrowTypeError(ctx, "Invalid argument: headerName");
     }
 
     hdr_name = JS_ToCString(ctx, argv[0]);
-    if(zstr(hdr_name)) {
-        err = JS_ThrowTypeError(ctx, "Invalid argument: headerName");
-        goto out;
-    }
 
     switch_mutex_lock(js_eventhandler->mutex);
 
@@ -236,7 +234,7 @@ static JSValue js_eventhandler_send_event(JSContext *ctx, JSValueConst this_val,
     EH_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     js_event = JS_GetOpaque(argv[0], js_event_get_classid(ctx));

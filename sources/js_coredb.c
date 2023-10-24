@@ -1,10 +1,8 @@
 /**
- * CoreDB
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_coredb.h"
 
 #define CLASS_NAME               "CoreDB"
 #define PROP_PATH                0
@@ -53,13 +51,14 @@ static JSValue js_coredb_table_exists(JSContext *ctx, JSValueConst this_val, int
     DB_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: tableName");
     }
 
     table_name = JS_ToCString(ctx, argv[0]);
-    if(zstr(table_name)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: tableName");
-    }
 
     sql = switch_mprintf("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'", table_name);
     if(switch_core_db_prepare(js_coredb->db, sql, -1, &stmt, 0) != 0) {
@@ -99,13 +98,14 @@ static JSValue js_coredb_exec(JSContext *ctx, JSValueConst this_val, int argc, J
     DB_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: query");
     }
 
     sqltxt = JS_ToCString(ctx, argv[0]);
-    if(zstr(sqltxt)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: query");
-    }
 
     if(!JS_IsUndefined(js_coredb->callback)) {
         js_coredb->callback = JS_UNDEFINED;
@@ -141,7 +141,7 @@ static JSValue js_coredb_prepare(JSContext *ctx, JSValueConst this_val, int argc
     DB_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     if(js_coredb->stmt) {
@@ -149,10 +149,11 @@ static JSValue js_coredb_prepare(JSContext *ctx, JSValueConst this_val, int argc
         js_coredb->stmt = NULL;
     }
 
-    sqltxt = JS_ToCString(ctx, argv[0]);
-    if(zstr(sqltxt)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: query");
     }
+
+    sqltxt = JS_ToCString(ctx, argv[0]);
 
     ret = switch_core_db_prepare(js_coredb->db, sqltxt, -1, &js_coredb->stmt, 0);
     JS_FreeCString(ctx, sqltxt);
@@ -176,8 +177,9 @@ static JSValue js_coredb_fetch(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_ThrowTypeError(ctx, "No active statement");
     }
 
-    row_data = JS_NewObject(ctx);
     cols = switch_core_db_column_count(js_coredb->stmt);
+    row_data = JS_NewObject(ctx);
+
     for(i = 0; i < cols; i++) {
         const char *var = (char *) switch_core_db_column_name(js_coredb->stmt, i);
         const char *val = (char *) switch_core_db_column_text(js_coredb->stmt, i);
@@ -197,21 +199,15 @@ static JSValue js_coredb_next(JSContext *ctx, JSValueConst this_val, int argc, J
 
     while(wait > 0) {
         int ret = switch_core_db_step(js_coredb->stmt);
-        if(ret == SWITCH_CORE_DB_BUSY) {
-            switch_cond_next(); wait--;
-            continue;
-        }
-        if(ret == SWITCH_CORE_DB_ROW) {
-            success = 1;
-            break;
-        }
-        if(ret == SWITCH_CORE_DB_DONE) {
-            success = 0;
-            break;
-        }
+
+        if(ret == SWITCH_CORE_DB_BUSY) { switch_cond_next(); wait--; continue; }
+        if(ret == SWITCH_CORE_DB_ROW)  { success = 1; break; }
+        if(ret == SWITCH_CORE_DB_DONE) { success = 0; break; }
+
         if(switch_core_db_finalize(js_coredb->stmt) != SWITCH_CORE_DB_OK) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "SQL error: %s\n", switch_core_db_errmsg(js_coredb->db));
         }
+
         js_coredb->stmt = NULL;
         break;
     }
@@ -228,17 +224,14 @@ static JSValue js_coredb_step(JSContext *ctx, JSValueConst this_val, int argc, J
 
     while(wait > 0) {
         int ret = switch_core_db_step(js_coredb->stmt);
-        if(ret == SWITCH_CORE_DB_BUSY) {
-            switch_cond_next(); wait--;
-            continue;
-        }
-        if(ret == SWITCH_CORE_DB_DONE) {
-            success = 1;
-            break;
-        }
+
+        if(ret == SWITCH_CORE_DB_BUSY) { switch_cond_next(); wait--; continue; }
+        if(ret == SWITCH_CORE_DB_DONE) { success = 1; break; }
+
         if(switch_core_db_finalize(js_coredb->stmt) != SWITCH_CORE_DB_OK) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "SQL error: %s\n", switch_core_db_errmsg(js_coredb->db));
         }
+
         js_coredb->stmt = NULL;
         break;
     }
@@ -256,7 +249,7 @@ static JSValue js_coredb_bind_text(JSContext *ctx, JSValueConst this_val, int ar
     DB_SANITY_CHECK_STATEMENT();
 
     if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     JS_ToUint32(ctx, &idx, argv[0]);
@@ -278,7 +271,7 @@ static JSValue js_coredb_bind_int(JSContext *ctx, JSValueConst this_val, int arg
     DB_SANITY_CHECK_STATEMENT();
 
     if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     JS_ToUint32(ctx, &idx, argv[0]);
@@ -386,13 +379,14 @@ static JSValue js_coredb_contructor(JSContext *ctx, JSValueConst new_target, int
     const char *dbname = NULL;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: dbname");
     }
 
     dbname = JS_ToCString(ctx, argv[0]);
-    if(zstr(dbname)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: dbname");
-    }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");

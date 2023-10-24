@@ -1,10 +1,8 @@
 /**
- * Event object
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_event.h"
 
 #define CLASS_NAME      "Event"
 #define PROP_READY      0
@@ -45,14 +43,15 @@ static JSValue js_event_add_header(JSContext *ctx, JSValueConst this_val, int ar
     EVENT_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: headerName");
     }
 
     hdr_name = JS_ToCString(ctx, argv[0]);
-    if(zstr(hdr_name)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: headerName");
-    }
-    hdr_value = JS_ToCString(ctx, argv[1]);
+    hdr_value = (QJS_IS_NULL(argv[1]) ? NULL : JS_ToCString(ctx, argv[1]));
 
     switch_event_add_header_string(js_event->event, SWITCH_STACK_BOTTOM, hdr_name, hdr_value);
 
@@ -70,13 +69,15 @@ static JSValue js_event_get_header(JSContext *ctx, JSValueConst this_val, int ar
     EVENT_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: headerName");
     }
 
     hdr_name = JS_ToCString(ctx, argv[0]);
-    if(zstr(hdr_name)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: headerName");
-    }
+
     val = switch_event_get_header(js_event->event, hdr_name);
 
     JS_FreeCString(ctx, hdr_name);
@@ -91,10 +92,10 @@ static JSValue js_event_add_body(JSContext *ctx, JSValueConst this_val, int argc
     EVENT_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    body = JS_ToCString(ctx, argv[0]);
+    body = (QJS_IS_NULL(argv[0]) ? NULL : JS_ToCString(ctx, argv[0]));
     switch_event_add_body(js_event->event, "%s", body);
 
     JS_FreeCString(ctx, body);
@@ -125,7 +126,7 @@ static JSValue js_event_serialize(JSContext *ctx, JSValueConst this_val, int arg
     uint8_t type = 0;
     EVENT_SANITY_CHECK();
 
-    if(argc > 0) {
+    if(argc > 0 && !QJS_IS_NULL(argv[0])) {
         const char *fmt = JS_ToCString(ctx, argv[0]);
         if(!strcasecmp(fmt, "xml")) {
             type = 1;
@@ -226,7 +227,7 @@ static JSValue js_event_contructor(JSContext *ctx, JSValueConst new_target, int 
     }
 
     if(argc > 0) {
-        const char *ename = JS_ToCString(ctx, argv[0]);
+        const char *ename = (QJS_IS_NULL(argv[0]) ? NULL : JS_ToCString(ctx, argv[0]));
         if(ename) {
             if(switch_name_event(ename, &etype) != SWITCH_STATUS_SUCCESS) {
                 obj = JS_ThrowTypeError(ctx, "Unknown event: %s", ename);
@@ -240,7 +241,7 @@ static JSValue js_event_contructor(JSContext *ctx, JSValueConst new_target, int 
             const char *subclass_name = NULL;
 
             if(argc > 1) {
-                subclass_name = JS_ToCString(ctx, argv[1]);
+                subclass_name = (QJS_IS_NULL(argv[1]) ? NULL : JS_ToCString(ctx, argv[1]));
             } else {
                 subclass_name = "none";
             }

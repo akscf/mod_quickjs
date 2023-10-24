@@ -1,10 +1,8 @@
 /**
- * Sockets (UDP/TCP)
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_socket.h"
 
 #define CLASS_NAME          "Socket"
 #define PROP_TYPE           0
@@ -33,16 +31,15 @@ static JSValue js_socket_property_get(JSContext *ctx, JSValueConst this_val, int
 
     switch(magic) {
         case PROP_TYPE: {
-            if(js_socket->type == S_TYPE_UDP) {
-                return JS_NewString(ctx, "udp");
+            switch(js_socket->type) {
+                case S_TYPE_UDP:
+                    return JS_NewString(ctx, "udp");
+                case S_TYPE_TCP:
+                    return JS_NewString(ctx, "tcp");
+                case S_TYPE_MULTICAST:
+                    return JS_NewString(ctx, "multicast");
             }
-            if(js_socket->type == S_TYPE_TCP) {
-                return JS_NewString(ctx, "tcp");
-            }
-            if(js_socket->type == S_TYPE_MULTICAST) {
-                return JS_NewString(ctx, "multicast");
-            }
-            break;
+            return JS_UNDEFINED;
         }
         case PROP_TIMEOUT: {
             return JS_NewInt32(ctx, js_socket->timeout);
@@ -89,6 +86,7 @@ static JSValue js_socket_property_set(JSContext *ctx, JSValueConst this_val, JSV
     return JS_FALSE;
 }
 
+/* connect(hostName, port) */
 static JSValue js_socket_connect(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     switch_status_t status;
@@ -100,25 +98,26 @@ static JSValue js_socket_connect(JSContext *ctx, JSValueConst this_val, int argc
     SOCKET_SANITY_CHECK();
 
     if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     if(js_socket->opened) {
         return JS_TRUE;
     }
 
-    JS_ToUint32(ctx, &port, argv[1]);
-    if(port <=0 ) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: port");
-    }
-
-    host = JS_ToCString(ctx, argv[0]);
-    if(zstr(host)) {
+    if(QJS_IS_NULL(argv[0])) {
         if(js_socket->type == S_TYPE_MULTICAST) {
             return JS_ThrowTypeError(ctx, "Invalid argument: multicastGroup");
         } else {
-            return JS_ThrowTypeError(ctx, "Invalid argument: host");
+            return JS_ThrowTypeError(ctx, "Invalid argument: hostName");
         }
+    } else {
+        host = JS_ToCString(ctx, argv[0]);
+    }
+
+    JS_ToUint32(ctx, &port, argv[1]);
+    if(port <= 0 ) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: port");
     }
 
     if(js_socket->type == S_TYPE_MULTICAST) {
@@ -190,7 +189,7 @@ static JSValue js_socket_close(JSContext *ctx, JSValueConst this_val, int argc, 
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
 
     if(!js_socket) {
-        return JS_ThrowTypeError(ctx, "Socket is not initialized");
+        return JS_ThrowTypeError(ctx, "Socket not initialized");
     }
     if(!js_socket->opened) {
         return JS_TRUE;
@@ -208,6 +207,7 @@ static JSValue js_socket_close(JSContext *ctx, JSValueConst this_val, int argc, 
     return JS_FALSE;
 }
 
+/* write(buffer, len) */
 static JSValue js_socket_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     switch_size_t buf_size = 0;
@@ -215,7 +215,7 @@ static JSValue js_socket_write(JSContext *ctx, JSValueConst this_val, int argc, 
     uint8_t *buf = NULL;
 
     if(argc < 2)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
@@ -228,7 +228,7 @@ static JSValue js_socket_write(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_NewInt64(ctx, 0);
     }
     if(len > buf_size) {
-        return JS_ThrowRangeError(ctx, "Buffer overflow (len > array size)");
+        return JS_ThrowRangeError(ctx, "len > buffer.size");
     }
 
     if(js_socket->type == S_TYPE_UDP) {
@@ -250,6 +250,7 @@ static JSValue js_socket_write(JSContext *ctx, JSValueConst this_val, int argc, 
     return JS_NewInt64(ctx, 0);
 }
 
+/* read(buf, len) */
 static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     switch_size_t buf_size = 0;
@@ -257,7 +258,7 @@ static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, J
     uint8_t *buf = NULL;
 
     if(argc < 2)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
@@ -270,7 +271,7 @@ static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_NewInt64(ctx, 0);
     }
     if(len > buf_size) {
-        return JS_ThrowRangeError(ctx, "Buffer overflow (len > array size)");
+        return JS_ThrowRangeError(ctx, "len > buffer.size");
     }
 
     if(switch_socket_recv(js_socket->socket, buf, &len) != SWITCH_STATUS_SUCCESS) {
@@ -281,6 +282,7 @@ static JSValue js_socket_read(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_NewInt64(ctx, len);
 }
 
+/* writeString(str) */
 static JSValue js_socket_write_string(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     uint32_t success = 0;
@@ -293,15 +295,14 @@ static JSValue js_socket_write_string(JSContext *ctx, JSValueConst this_val, int
         return JS_ThrowTypeError(ctx, "Socket is closed");
     }
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        success = 0; goto out;
     }
 
     data = JS_ToCString(ctx, argv[0]);
-    if(zstr(data)) {
-        success = 0;
-        goto out;
-    }
-
     len = strlen(data);
 
     if(js_socket->type == S_TYPE_UDP) {
@@ -320,6 +321,7 @@ out:
     return (success ? JS_TRUE : JS_FALSE);
 }
 
+/* readString() */
 static JSValue js_socket_read_string(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_socket_t *js_socket = JS_GetOpaque2(ctx, this_val, js_socket_get_classid(ctx));
     const char *usr_delimiter = NULL;
@@ -425,6 +427,7 @@ static void js_socket_finalizer(JSRuntime *rt, JSValue val) {
     js_free_rt(rt, js_socket);
 }
 
+/* new() */
 static JSValue js_socket_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
     JSValue obj = JS_UNDEFINED;
     JSValue err = JS_UNDEFINED;

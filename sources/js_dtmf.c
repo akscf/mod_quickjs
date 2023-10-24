@@ -1,13 +1,11 @@
 /**
- * DTMF object
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_dtmf.h"
 
 #define CLASS_NAME                 "DTMF"
-#define PROP_DIGITE                0
+#define PROP_DIGIT                 0
 #define PROP_DURATION              1
 
 static JSValue js_dtmf_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
@@ -22,7 +20,7 @@ static JSValue js_dtmf_property_get(JSContext *ctx, JSValueConst this_val, int m
     }
 
     switch(magic) {
-        case PROP_DIGITE: {
+        case PROP_DIGIT: {
             char tmp[2] = { js_dtmf->dtmf->digit, '\0' };
             return JS_NewString(ctx, (char *) tmp);
         }
@@ -47,7 +45,7 @@ static JSClassDef js_dtmf_class = {
 };
 
 static const JSCFunctionListEntry js_dtmf_proto_funcs[] = {
-    JS_CGETSET_MAGIC_DEF("digit", js_dtmf_property_get, js_dtmf_property_set, PROP_DIGITE),
+    JS_CGETSET_MAGIC_DEF("digit", js_dtmf_property_get, js_dtmf_property_set, PROP_DIGIT),
     JS_CGETSET_MAGIC_DEF("duration", js_dtmf_property_get, js_dtmf_property_set, PROP_DURATION),
 };
 

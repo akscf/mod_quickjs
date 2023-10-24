@@ -1,13 +1,10 @@
 /**
- * ODBC
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_odbc.h"
 
-#ifdef FS_MOD_ENABLE_ODBC
-
+#ifdef JS_ODBC_ENABLE
 #define CLASS_NAME              "ODBC"
 #define PROP_DSN                0
 #define PROP_USERNAME           1
@@ -109,13 +106,14 @@ static JSValue js_odbc_execute(JSContext *ctx, JSValueConst this_val, int argc, 
     DB_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: sql");
     }
 
     sql = JS_ToCString(ctx, argv[0]);
-    if(zstr(sql)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: sql");
-    }
 
     if(switch_odbc_handle_get_state(js_odbc->db) != SWITCH_ODBC_STATE_CONNECTED) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Database is not connected!\n");
@@ -143,13 +141,14 @@ static JSValue js_odbc_exec(JSContext *ctx, JSValueConst this_val, int argc, JSV
     DB_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: sql");
     }
 
     sql = JS_ToCString(ctx, argv[0]);
-    if(zstr(sql)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: sql");
-    }
 
     if(switch_odbc_handle_get_state(js_odbc->db) != SWITCH_ODBC_STATE_CONNECTED) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Database is not connected!\n");
@@ -293,18 +292,19 @@ static JSValue js_odbc_contructor(JSContext *ctx, JSValueConst new_target, int a
     const char *dsn = NULL, *username = NULL, *password = NULL;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    dsn = JS_ToCString(ctx, argv[0]);
-    if(zstr(dsn)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: dsn");
     }
+    dsn = JS_ToCString(ctx, argv[0]);
+
     if(argc > 1) {
-        username = JS_ToCString(ctx, argv[1]);
+        username = (QJS_IS_NULL(argv[1]) ? NULL : JS_ToCString(ctx, argv[1]));
     }
     if(argc > 2) {
-        password = JS_ToCString(ctx, argv[2]);
+        password = (QJS_IS_NULL(argv[2]) ? NULL : JS_ToCString(ctx, argv[2]));
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
@@ -401,5 +401,5 @@ switch_status_t js_odbc_class_register(JSContext *ctx, JSValue global_obj) {
     return SWITCH_STATUS_SUCCESS;
 }
 
-#endif // FS_MOD_ENABLE_ODBC
+#endif
 

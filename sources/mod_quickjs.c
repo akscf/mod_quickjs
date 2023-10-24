@@ -1,6 +1,6 @@
 /**
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
 #include "mod_quickjs.h"
 
@@ -86,7 +86,7 @@ static JSValue js_msleep(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     uint32_t msec = 0;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     JS_ToUint32(ctx, &msec, argv[0]);
@@ -103,7 +103,7 @@ static JSValue js_global_set(JSContext *ctx, JSValueConst this_val, int argc, JS
     const char *val_str = NULL;
 
     if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     var_str = JS_ToCString(ctx, argv[0]);
@@ -122,7 +122,7 @@ static JSValue js_global_get(JSContext *ctx, JSValueConst this_val, int argc, JS
     char *val = NULL;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     var_str = JS_ToCString(ctx, argv[0]);
@@ -188,7 +188,7 @@ static JSValue js_api_execute(JSContext *ctx, JSValueConst this_val, int argc, J
     JSValue js_ret_val;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     api_str = JS_ToCString(ctx, argv[0]);
@@ -219,7 +219,7 @@ static JSValue js_md5(JSContext *ctx, JSValueConst this_val, int argc, JSValueCo
     const char *str = NULL;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     str = JS_ToCString(ctx, argv[0]);
@@ -244,7 +244,7 @@ static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     char *buf = NULL;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     script = JS_GetContextOpaque(ctx);
@@ -558,7 +558,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     char *script_buf_local = NULL;
     char *script_tmp_buff = NULL;
-    uint8_t fl_curl_enable=0, fl_odbc_enable=0;
+    uint8_t fl_odbc_enable=0;
     JSContext *ctx = NULL;
     JSRuntime *rt = NULL;
     JSValue global_obj, script_obj, argc_obj, argv_obj, flags_obj;
@@ -605,18 +605,15 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_coredb_class_register(ctx, global_obj);
     js_eventhandler_class_register(ctx, global_obj);
     js_xml_class_register(ctx, global_obj);
-#ifdef FS_MOD_ENABLE_CURL
     js_curl_class_register(ctx, global_obj);
-    fl_curl_enable = 1;
-#endif
-#ifdef FS_MOD_ENABLE_ODBC
+
+#ifdef JS_ODBC_ENABLE
     js_odbc_class_register(ctx, global_obj);
     fl_odbc_enable = 1;
 #endif
     script->fl_ready = SWITCH_FALSE; /* unset */
 
     flags_obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, flags_obj, "curlEnabled", JS_NewString(ctx, (fl_curl_enable ? "true" : "false")));
     JS_SetPropertyStr(ctx, flags_obj, "odbcEnabled", JS_NewString(ctx, (fl_odbc_enable ? "true" : "false")));
     JS_SetPropertyStr(ctx, global_obj, "flags", flags_obj);
 

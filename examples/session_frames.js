@@ -41,10 +41,10 @@ if(typeof(session) != 'undefined') {
         if(!session.isReady) { break; }
         var dlen = session.frameRead(srcBuf);
         if(dlen > 0) {
-            dlen = rcodec.decode(srcBuf, rcodec.samplerate, dlen, tmpBuf, rcodec.samplerate);
+            dlen = rcodec.decode(srcBuf, dlen, rcodec.samplerate, tmpBuf, rcodec.samplerate);
             if(dlen > 0) {
                 if(vad_hits > 0) {
-                    dlen = wcodec.encode(tmpBuf, rcodec.samplerate, dlen, dstBuf, wcodec.samplerate);
+                    dlen = wcodec.encode(tmpBuf, dlen, rcodec.samplerate, dstBuf, wcodec.samplerate);
                     if(dlen > 0) {
                         session.frameWrite(dstBuf, dlen);
                     }

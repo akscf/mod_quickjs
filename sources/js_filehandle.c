@@ -1,10 +1,8 @@
 /**
- * Freeswitch file handle
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_filehandle.h"
 
 #define CLASS_NAME          "FileHandle"
 #define FH_PROP_SPEED       0
@@ -73,19 +71,19 @@ static JSValue js_fh_property_set(JSContext *ctx, JSValueConst this_val, JSValue
                 JS_ToUint32(ctx, &ival, val);
                 js_fh->fh->speed = ival;
             } else {
-                sval = JS_ToCString(ctx, val);
-                if(zstr(sval)) {
+                if(QJS_IS_NULL(val)) {
                     js_fh->fh->speed = 0;
                 } else {
+                    sval = JS_ToCString(ctx, val);
                     if(sval[0] == '+' || sval[0] == '-') {
                         int step = atoi(sval);
                         js_fh->fh->speed += (!step ? 1 : step);
                     } else {
                         js_fh->fh->speed = atoi(sval);
                     }
+                    JS_FreeCString(ctx, sval);
                 }
             }
-            JS_FreeCString(ctx, sval);
             return JS_TRUE;
         }
         case FH_PROP_VOLUME: {
@@ -93,19 +91,23 @@ static JSValue js_fh_property_set(JSContext *ctx, JSValueConst this_val, JSValue
                 JS_ToUint32(ctx, &ival, val);
                 js_fh->fh->vol = ival;
             } else {
-                sval = JS_ToCString(ctx, val);
-                if(zstr(sval)) {
+                if(QJS_IS_NULL(val)) {
                     js_fh->fh->vol = 0;
                 } else {
-                    if(sval[0] == '+' || sval[0] == '-') {
-                        int step = atoi(sval);
-                        js_fh->fh->vol += (!step ? 1 : step);
+                    sval = JS_ToCString(ctx, val);
+                    if(zstr(sval)) {
+                        js_fh->fh->vol = 0;
                     } else {
-                        js_fh->fh->vol = atoi(sval);
+                        if(sval[0] == '+' || sval[0] == '-') {
+                            int step = atoi(sval);
+                            js_fh->fh->vol += (!step ? 1 : step);
+                        } else {
+                            js_fh->fh->vol = atoi(sval);
+                        }
                     }
+                    JS_FreeCString(ctx, sval);
                 }
             }
-            JS_FreeCString(ctx, sval);
             return JS_TRUE;
         }
     }
@@ -170,10 +172,11 @@ static JSValue js_fh_seek(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 
     codec = switch_core_session_get_read_codec(js_fh->session);
 
-    val = JS_ToCString(ctx, argv[0]);
-    if(zstr(val)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_FALSE;
     }
+
+    val = JS_ToCString(ctx, argv[0]);
 
     if(val[0] == '+' || val[0] == '-') {
         step = atoi(val + 1);
@@ -204,7 +207,7 @@ static JSValue js_fh_read(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     FH_SANITY_CHECK();
 
     if(argc < 2)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
@@ -239,7 +242,7 @@ static JSValue js_fh_write(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     FH_SANITY_CHECK();
 
     if(argc < 2)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
@@ -342,10 +345,11 @@ static JSValue js_fh_contructor(JSContext *ctx, JSValueConst new_target, int arg
     char *dpath = NULL;
 
     if(argc > 0) {
-        path = JS_ToCString(ctx, argv[0]);
-        if(zstr(path)) {
+        if(QJS_IS_NULL(argv[0])) {
             return JS_ThrowTypeError(ctx, "Invalid argument: filename");
         }
+        path = JS_ToCString(ctx, argv[0]);
+
         if(argc > 1) {
             jss = JS_GetOpaque(argv[1], js_seesion_get_classid(ctx));
             if(!jss || !jss->session) {
@@ -369,8 +373,8 @@ static JSValue js_fh_contructor(JSContext *ctx, JSValueConst new_target, int arg
             }
         }
         if(argc > 2) {
-            const char *flstr = JS_ToCString(ctx, argv[2]);
-            if(!zstr(flstr)) {
+            if(!QJS_IS_NULL(argv[2])) {
+                const char *flstr = JS_ToCString(ctx, argv[2]);
                 if(strstr(flstr, "read")) {
                     flags |= SWITCH_FILE_FLAG_READ;
                 }
@@ -392,8 +396,8 @@ static JSValue js_fh_contructor(JSContext *ctx, JSValueConst new_target, int arg
                 if(strstr(flstr, "raw")) {
                     flags |= SWITCH_FILE_DATA_RAW;
                 }
+                JS_FreeCString(ctx, flstr);
             }
-            JS_FreeCString(ctx, flstr);
         }
     }
     if(jss && codec && (dpath || path)) {

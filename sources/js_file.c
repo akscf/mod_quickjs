@@ -1,10 +1,8 @@
 /**
- * File
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_file.h"
 
 #define CLASS_NAME               "File"
 #define PROP_PATH                0
@@ -302,7 +300,7 @@ static JSValue js_file_read(JSContext *ctx, JSValueConst this_val, int argc, JSV
     FILE_SANITY_CHECK_OPEN();
 
     if(argc < 2)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     buf = JS_GetArrayBuffer(ctx, &size, argv[0]);
@@ -336,7 +334,7 @@ static JSValue js_file_write(JSContext *ctx, JSValueConst this_val, int argc, JS
     FILE_SANITY_CHECK_OPEN();
 
     if(argc < 2)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     buf = JS_GetArrayBuffer(ctx, &size, argv[0]);
@@ -369,15 +367,16 @@ static JSValue js_file_write_str(JSContext *ctx, JSValueConst this_val, int argc
     FILE_SANITY_CHECK_OPEN();
 
     if(argc < 1)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    str = JS_ToCString(ctx, argv[0]);
-    if(zstr(str)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_NewInt64(ctx, 0);
     }
 
+    str = JS_ToCString(ctx, argv[0]);
     len = strlen(str);
+
     status = switch_file_write(js_file->fd, str, &len);
     JS_FreeCString(ctx, str);
 
@@ -391,7 +390,7 @@ static JSValue js_file_read_str(JSContext *ctx, JSValueConst this_val, int argc,
     FILE_SANITY_CHECK_OPEN();
 
     if(argc < 1)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     JS_ToInt64(ctx, &len, argv[0]);
@@ -422,7 +421,7 @@ static JSValue js_file_seek(JSContext *ctx, JSValueConst this_val, int argc, JSV
     FILE_SANITY_CHECK_OPEN();
 
     if(argc < 1)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     JS_ToInt64(ctx, &ofs, argv[0]);
@@ -471,13 +470,14 @@ static JSValue js_file_rename(JSContext *ctx, JSValueConst this_val, int argc, J
     FILE_SANITY_CHECK();
 
     if(argc < 1)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: toPath");
     }
 
     to_path = JS_ToCString(ctx, argv[0]);
-    if(zstr(to_path)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: toPath");
-    }
 
     if(switch_file_rename(js_file->path, to_path, NULL) == SWITCH_STATUS_SUCCESS) {
         js_file->path = switch_core_strdup(js_file->pool, to_path);
@@ -497,13 +497,14 @@ static JSValue js_file_copy(JSContext *ctx, JSValueConst this_val, int argc, JSV
     FILE_SANITY_CHECK();
 
     if(argc < 1)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: toPath");
     }
 
     to_path = JS_ToCString(ctx, argv[0]);
-    if(zstr(to_path)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: toPath");
-    }
 
     ret_val = ((switch_file_copy(js_file->path, to_path, SWITCH_FPROT_FILE_SOURCE_PERMS, NULL) == SWITCH_STATUS_SUCCESS) ? JS_TRUE : JS_FALSE);
     JS_FreeCString(ctx, to_path);
@@ -537,7 +538,7 @@ static JSValue js_file_dir_list(JSContext *ctx, JSValueConst this_val, int argc,
     DIR_SANITY_CHECK_OPEN();
 
     if(argc < 1)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     if(!JS_IsFunction(ctx, argv[0])) {
@@ -645,13 +646,14 @@ static JSValue js_file_contructor(JSContext *ctx, JSValueConst new_target, int a
     const char *path = NULL;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: filename");
     }
 
     path = JS_ToCString(ctx, argv[0]);
-    if(zstr(path)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: filename");
-    }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");

@@ -1,10 +1,8 @@
 /**
- * XML
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_xml.h"
 
 #define CLASS_NAME              "XML"
 #define PROP_NAME                0
@@ -60,13 +58,13 @@ static JSValue js_xml_property_set(JSContext *ctx, JSValueConst this_val, JSValu
 
     switch(magic) {
         case PROP_DATA: {
-            str = JS_ToCString(ctx, val);
-            if(!zstr(str)) {
-                switch_xml_set_txt_d(js_xml->xml, str);
-            } else {
+            if(QJS_IS_NULL(val)) {
                 switch_xml_set_txt(js_xml->xml, "");
+            } else {
+                str = JS_ToCString(ctx, val);
+                switch_xml_set_txt_d(js_xml->xml, str);
+                JS_FreeCString(ctx, str);
             }
-            JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
     }
@@ -82,13 +80,14 @@ static JSValue js_xml_add_child(JSContext *ctx, JSValueConst this_val, int argc,
     XML_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: name");
     }
 
     name = JS_ToCString(ctx, argv[0]);
-    if(zstr(name)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: name");
-    }
 
     xml = switch_xml_add_child_d(js_xml->xml, name, 0);
     if(!xml) {
@@ -108,19 +107,19 @@ static JSValue js_xml_get_child(JSContext *ctx, JSValueConst this_val, int argc,
     XML_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    name = JS_ToCString(ctx, argv[0]);
-    if(zstr(name)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: name");
     }
+    name = JS_ToCString(ctx, argv[0]);
 
     if(argc > 1) {
-        attr_name = JS_ToCString(ctx, argv[1]);
+        attr_name = (QJS_IS_NULL(argv[1]) ? NULL : JS_ToCString(ctx, argv[1]));
     }
     if(argc > 2) {
-        attr_val = JS_ToCString(ctx, argv[2]);
+        attr_val = (QJS_IS_NULL(argv[2]) ? NULL : JS_ToCString(ctx, argv[2]));
     }
 
     if(name && !attr_name) {
@@ -148,13 +147,14 @@ static JSValue js_xml_get_attr(JSContext *ctx, JSValueConst this_val, int argc, 
     XML_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: name");
     }
 
     name = JS_ToCString(ctx, argv[0]);
-    if(zstr(name)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: name");
-    }
 
     val = switch_xml_attr_soft(js_xml->xml, name);
     JS_FreeCString(ctx, name);
@@ -172,13 +172,14 @@ static JSValue js_xml_set_attr(JSContext *ctx, JSValueConst this_val, int argc, 
     XML_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: name");
     }
 
     name = JS_ToCString(ctx, argv[0]);
-    if(zstr(name)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: name");
-    }
 
     if(argc > 1) {
         value = JS_ToCString(ctx, argv[1]);
@@ -255,6 +256,7 @@ static JSValue js_xml_serialize(JSContext *ctx, JSValueConst this_val, int argc,
 
         return obj;
     }
+
     return JS_UNDEFINED;
 }
 
@@ -307,13 +309,14 @@ static JSValue js_xml_contructor(JSContext *ctx, JSValueConst new_target, int ar
     const char *data = NULL;
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: data");
     }
 
     data = JS_ToCString(ctx, argv[0]);
-    if(zstr(data)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: data");
-    }
 
     xml = switch_xml_parse_str_dynamic((char *)data, SWITCH_TRUE);
     if(!xml) {
@@ -342,6 +345,7 @@ static JSValue js_xml_contructor(JSContext *ctx, JSValueConst new_target, int ar
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-xml-constructor: js-xml=%p, xml=%p\n", js_xml, js_xml->xml);
 
     return obj;
+
 fail:
     if(js_xml) {
         js_free(ctx, js_xml);
@@ -371,7 +375,7 @@ static JSValue js_xml_object_create(JSContext *ctx, switch_xml_t xml) {
     if(JS_IsException(obj)) { return obj; }
 
     js_xml->xml = xml;
-    js_xml->fl_free_xml = 0; // !!!
+    js_xml->fl_free_xml = 0;
 
     JS_SetOpaque(obj, js_xml);
 

@@ -1,10 +1,8 @@
 /**
- * Codecs
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_codec.h"
 
 #define CLASS_NAME              "Codec"
 #define PROP_IS_READY           0
@@ -19,20 +17,8 @@
            return JS_ThrowTypeError(ctx, "Codec is not initialized"); \
         }
 
-
 static void js_codec_finalizer(JSRuntime *rt, JSValue val);
 static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
-
-
-static JSValue js_codec_ready(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_codec_t *js_codec = JS_GetOpaque2(ctx, this_val, js_codec_get_classid(ctx));
-
-    if(!js_codec || !js_codec->codec) {
-        return JS_FALSE;
-    }
-
-    return (switch_core_codec_ready(js_codec->codec) ? JS_TRUE : JS_FALSE);
-}
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_codec_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
@@ -77,6 +63,7 @@ static JSValue js_codec_property_set(JSContext *ctx, JSValueConst this_val, JSVa
     return JS_FALSE;
 }
 
+/* encode(srcBuf, srcLen, srcSamplerate, dstBuf, dstSamplerate) */
 static JSValue js_codec_encode(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_codec_t *js_codec = JS_GetOpaque2(ctx, this_val, js_codec_get_classid(ctx));
     switch_status_t status;
@@ -88,7 +75,7 @@ static JSValue js_codec_encode(JSContext *ctx, JSValueConst this_val, int argc, 
     CODEC_SANITY_CHECK();
 
     if(argc < 3) {
-       return JS_ThrowTypeError(ctx, "Invalid arguments");
+       return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     if(!switch_core_codec_ready(js_codec->codec)) {
@@ -96,7 +83,7 @@ static JSValue js_codec_encode(JSContext *ctx, JSValueConst this_val, int argc, 
     }
 
     if(!(js_codec->flags & SWITCH_CODEC_FLAG_ENCODE)) {
-        return JS_ThrowTypeError(ctx, "Encode is not supported");
+        return JS_ThrowTypeError(ctx, "Encode isn't supported");
     }
 
     src_buf = JS_GetArrayBuffer(ctx, &src_buf_size, argv[0]);
@@ -109,9 +96,9 @@ static JSValue js_codec_encode(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_ThrowTypeError(ctx, "Invalid argument: dstBuffer");
     }
 
-    JS_ToInt32(ctx, &src_samplerate, argv[1]);
+    JS_ToInt32(ctx, &src_len, argv[1]);
+    JS_ToInt32(ctx, &src_samplerate, argv[2]);
     JS_ToInt32(ctx, &dst_samplerate, argv[4]);
-    JS_ToInt32(ctx, &src_len, argv[2]);
 
     if(!dst_samplerate) {
         dst_samplerate = src_samplerate;
@@ -129,13 +116,14 @@ static JSValue js_codec_encode(JSContext *ctx, JSValueConst this_val, int argc, 
     dst_len = dst_buf_size;
     status = switch_core_codec_encode(js_codec->codec, NULL, src_buf, src_len, src_samplerate, dst_buf, &dst_len, &dst_samplerate, &flags);
     if(status != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't encode buffer (err:%d)\n", status);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Encode failed (err:%d)\n", status);
         return JS_NewInt32(ctx, 0);
     }
 
     return JS_NewInt32(ctx, dst_len);
 }
 
+/* decode(srcBuf, srcLen, srcSamplerate, dstBuf, dstSamplerate) */
 static JSValue js_codec_decode(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_codec_t *js_codec = JS_GetOpaque2(ctx, this_val, js_codec_get_classid(ctx));
     switch_status_t status;
@@ -147,15 +135,15 @@ static JSValue js_codec_decode(JSContext *ctx, JSValueConst this_val, int argc, 
     CODEC_SANITY_CHECK();
 
     if(argc < 3) {
-       return JS_ThrowTypeError(ctx, "Invalid arguments");
+       return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     if(!switch_core_codec_ready(js_codec->codec)) {
         return JS_ThrowTypeError(ctx, "Codec is not ready");
     }
 
-    if(!(js_codec->flags & SWITCH_CODEC_FLAG_DECODE)) {
-        return JS_ThrowTypeError(ctx, "Decode is not supported");
+    if(!(js_codec->flags & SWITCH_CODEC_FLAG_ENCODE)) {
+        return JS_ThrowTypeError(ctx, "Decode isn't supported");
     }
 
     src_buf = JS_GetArrayBuffer(ctx, &src_buf_size, argv[0]);
@@ -168,9 +156,9 @@ static JSValue js_codec_decode(JSContext *ctx, JSValueConst this_val, int argc, 
         return JS_ThrowTypeError(ctx, "Invalid argument: dstBuffer");
     }
 
-    JS_ToInt32(ctx, &src_samplerate, argv[1]);
+    JS_ToInt32(ctx, &src_len, argv[1]);
+    JS_ToInt32(ctx, &src_samplerate, argv[2]);
     JS_ToInt32(ctx, &dst_samplerate, argv[4]);
-    JS_ToInt32(ctx, &src_len, argv[2]);
 
     if(!dst_samplerate) {
         dst_samplerate = src_samplerate;
@@ -188,7 +176,7 @@ static JSValue js_codec_decode(JSContext *ctx, JSValueConst this_val, int argc, 
     dst_len = dst_buf_size;
     status = switch_core_codec_decode(js_codec->codec, NULL, src_buf, src_len, src_samplerate, dst_buf, &dst_len, &dst_samplerate, &flags);
     if(status != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't encode buffer (err:%d)\n", status);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Decode failed (err:%d)\n", status);
         return JS_NewInt32(ctx, 0);
     }
 
@@ -234,6 +222,7 @@ static void js_codec_finalizer(JSRuntime *rt, JSValue val) {
     js_free_rt(rt, js_codec);
 }
 
+/* new(session, codecName, samplerate, channels, ptime)*/
 static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
     JSValue obj = JS_UNDEFINED;
     JSValue err = JS_UNDEFINED;
@@ -246,13 +235,20 @@ static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int 
     const char *name = NULL;
 
     if(argc < 4) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Too little arguments");
     }
 
     jss = JS_GetOpaque(argv[0], js_seesion_get_classid(ctx));
     if(!jss || !jss->session) {
         err = JS_ThrowTypeError(ctx, "Invalid argument: session");
         goto fail;
+    }
+
+    if(QJS_IS_NULL(argv[1])) {
+        err = JS_ThrowTypeError(ctx, "Invalid argument: codecName");
+        goto fail;
+    } else {
+        name = JS_ToCString(ctx, argv[1]);
     }
 
     JS_ToInt32(ctx, &samplerate, argv[2]);
@@ -270,12 +266,6 @@ static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int 
     JS_ToInt32(ctx, &ptime, argv[4]);
     if(ptime <= 0) {
         err = JS_ThrowTypeError(ctx, "Invalid argument: ptime");
-        goto fail;
-    }
-
-    name = JS_ToCString(ctx, argv[1]);
-    if(zstr(name)) {
-        err = JS_ThrowTypeError(ctx, "Invalid argument: codecName");
         goto fail;
     }
 
@@ -332,8 +322,10 @@ fail:
     if(js_codec) {
         js_free(ctx, js_codec);
     }
+
     JS_FreeValue(ctx, obj);
     JS_FreeCString(ctx, name);
+
     return (JS_IsUndefined(err) ? JS_EXCEPTION : err);
 }
 

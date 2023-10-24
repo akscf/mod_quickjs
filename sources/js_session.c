@@ -1,10 +1,8 @@
 /**
- * Session object
- *
- * Copyright (C) AlexandrinKS
- * https://akscf.org/
+ * (C)2021 aks
+ * https://github.com/akscf/
  **/
-#include "mod_quickjs.h"
+#include "js_session.h"
 
 #define CLASS_NAME                  "Session"
 #define PROP_NAME                   0
@@ -105,20 +103,28 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
             return JS_NewInt32(ctx, switch_channel_get_cause(channel));
 
         case PROP_CALLER_ID_NAME:
-            if(!caller_profile) { return JS_UNDEFINED; }
-            return JS_NewString(ctx, caller_profile->caller_id_name);
+            if(caller_profile) {
+                return JS_NewString(ctx, caller_profile->caller_id_name);
+            }
+            return JS_UNDEFINED;
 
         case PROP_CALLER_ID_NUMBER:
-            if(!caller_profile) { return JS_UNDEFINED; }
-            return JS_NewString(ctx, caller_profile->caller_id_number);
+            if(caller_profile) {
+                return JS_NewString(ctx, caller_profile->caller_id_number);
+            }
+            return JS_UNDEFINED;
 
         case PROP_PROFILE_DIALPLAN:
-            if(!caller_profile) { return JS_UNDEFINED; }
-            return JS_NewString(ctx, caller_profile->dialplan);
+            if(caller_profile) {
+                return JS_NewString(ctx, caller_profile->dialplan);
+            }
+            return JS_UNDEFINED;
 
         case PROP_PROFILE_DESTINATION:
-            if(!caller_profile) { return JS_UNDEFINED; }
-            return JS_NewString(ctx, caller_profile->destination_number);
+            if(caller_profile) {
+                return JS_NewString(ctx, caller_profile->destination_number);
+            }
+            return JS_UNDEFINED;
 
         case PROP_SAMPLERATE:
             switch_core_session_get_read_impl(jss->session, &read_impl);
@@ -219,29 +225,25 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
         return JS_FALSE;
     }
 
-    js_tts_name = JS_ToCString(ctx, argv[0]);
-    if(zstr(js_tts_name)) {
+    if(QJS_IS_NULL(argv[0])) {
         ch_tts_name = switch_channel_get_variable(channel, "tts_engine");
         if(zstr(ch_tts_name)) {
             return JS_ThrowTypeError(ctx, "Invalid argument: ttsEngine");
         }
     }
-
-    js_tts_voice = JS_ToCString(ctx, argv[1]);
-    if(zstr(js_tts_voice)) {
-         ch_tts_voice = switch_channel_get_variable(channel, "tts_voice");
-            if(zstr(ch_tts_name)) {
-                JS_FreeCString(ctx, js_tts_voice);
-                return JS_ThrowTypeError(ctx, "Invalid argument: ttlVoice");
-            }
+    if(QJS_IS_NULL(argv[1])) {
+        ch_tts_voice = switch_channel_get_variable(channel, "tts_voice");
+        if(zstr(ch_tts_name)) {
+            return JS_ThrowTypeError(ctx, "Invalid argument: ttlVoice");
+        }
     }
-
-    tts_text = JS_ToCString(ctx, argv[2]);
-    if(zstr(tts_text)) {
-        JS_FreeCString(ctx, js_tts_name);
-        JS_FreeCString(ctx, js_tts_voice);
+    if(QJS_IS_NULL(argv[2])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: ttsText");
     }
+
+    js_tts_name = JS_ToCString(ctx, argv[0]);
+    js_tts_voice = JS_ToCString(ctx, argv[1]);
+    tts_text = JS_ToCString(ctx, argv[2]);
 
     if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
         memset(&cb_state, 0, sizeof(cb_state));
@@ -284,14 +286,14 @@ static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int 
     CHANNEL_MEDIA_SANITY_CHECK();
 
     if(argc > 0) {
+        if(QJS_IS_NULL(argv[0])) { return JS_FALSE; }
         phrase_name = JS_ToCString(ctx, argv[0]);
-        if(zstr(phrase_name)) { return JS_FALSE; }
     }
     if(argc > 1) {
-        phrase_data = JS_ToCString(ctx, argv[1]);
+        phrase_data = (QJS_IS_NULL(argv[1]) ? NULL : JS_ToCString(ctx, argv[1]));
     }
     if(argc > 2) {
-        phrase_lang = JS_ToCString(ctx, argv[2]);
+        phrase_lang = (QJS_IS_NULL(argv[2]) ? NULL : JS_ToCString(ctx, argv[2]));
     }
     if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
         memset(&cb_state, 0, sizeof(cb_state));
@@ -408,21 +410,21 @@ static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_
     JS_ToUint32(ctx, &max_tries, argv[2]);
     JS_ToUint32(ctx, &timeout, argv[3]);
 
-    terminators = JS_ToCString(ctx, argv[4]);
-    audio_file = JS_ToCString(ctx, argv[5]);
-    bad_audio_file = JS_ToCString(ctx, argv[6]);
+    terminators = (QJS_IS_NULL(argv[4]) ? NULL : JS_ToCString(ctx, argv[4]));
+    audio_file = (QJS_IS_NULL(argv[5]) ? NULL : JS_ToCString(ctx, argv[5]));
+    bad_audio_file = (QJS_IS_NULL(argv[6]) ? NULL : JS_ToCString(ctx, argv[6]));
 
     if(argc > 7) {
-        digits_regex = JS_ToCString(ctx, argv[7]);
+        digits_regex = (QJS_IS_NULL(argv[7]) ? NULL : JS_ToCString(ctx, argv[7]));
     }
     if(argc > 8) {
-        var_name = JS_ToCString(ctx, argv[8]);
+        var_name = (QJS_IS_NULL(argv[8]) ? NULL : JS_ToCString(ctx, argv[8]));
     }
     if(argc > 9) {
         JS_ToUint32(ctx, &digit_timeout, argv[9]);
     }
     if(argc > 10) {
-        transfer_on_failure = JS_ToCString(ctx, argv[10]);
+        transfer_on_failure = ((QJS_IS_NULL(argv[10]) : NULL ? JS_ToCString(ctx, argv[10]));
     }
 
     if(max_digits < min_digits) {
@@ -441,6 +443,7 @@ static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_
     JS_FreeCString(ctx, terminators);
     JS_FreeCString(ctx, audio_file);
     JS_FreeCString(ctx, bad_audio_file);
+    JS_FreeCString(ctx, digits_regex);
     JS_FreeCString(ctx, var_name);
     JS_FreeCString(ctx, transfer_on_failure);
 
@@ -469,10 +472,8 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
         if(js_file) {
             file_obj_fname = strdup(js_file->path);
         } else {
+            if(QJS_IS_NULL(argv[0])) { return JS_FALSE; }
             file_name = JS_ToCString(ctx, argv[0]);
-            if(zstr(file_name)) {
-                return JS_FALSE;
-            }
         }
     }
     if(argc > 1) {
@@ -876,14 +877,14 @@ static JSValue js_session_gen_tones(JSContext *ctx, JSValueConst this_val, int a
     CHANNEL_SANITY_CHECK();
 
     if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    tone_script = JS_ToCString(ctx, argv[0]);
-    if(zstr(tone_script)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: toneScript");
     }
 
+    tone_script = JS_ToCString(ctx, argv[0]);
     buf = switch_core_session_strdup(jss->session, tone_script);
     JS_FreeCString(ctx, tone_script);
 
@@ -942,7 +943,7 @@ static JSValue js_session_frame_read(JSContext *ctx, JSValueConst this_val, int 
     SESSION_SANITY_CHECK();
 
     if(argc < 1)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
@@ -971,7 +972,7 @@ static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int
     SESSION_SANITY_CHECK();
 
     if(argc < 2)  {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     buf = JS_GetArrayBuffer(ctx, &buf_size, argv[0]);
@@ -984,7 +985,7 @@ static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int
         return JS_NewInt64(ctx, 0);
     }
     if(len > buf_size) {
-        return JS_ThrowRangeError(ctx, "Buffer overflow (len > array size)");
+        return JS_ThrowRangeError(ctx, "len > buffer.size");
     }
 
     if(argc > 2) {
@@ -1022,11 +1023,6 @@ static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int
     return JS_NewInt64(ctx, len);
 }
 
-static JSValue js_session_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-
-    return js_session_hangup(ctx, this_val, argc, argv);
-}
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // handlers
@@ -1206,9 +1202,7 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("getReadCodec", 0, js_session_get_read_codec),
     JS_CFUNC_DEF("getWriteCodec", 0, js_session_get_write_codec),
     JS_CFUNC_DEF("frameRead", 1, js_session_frame_read),
-    JS_CFUNC_DEF("frameWrite", 1, js_session_frame_write),
-    // deprecated
-    JS_CFUNC_DEF("destroy", 0, js_session_destroy),
+    JS_CFUNC_DEF("frameWrite", 1, js_session_frame_write)
 };
 
 static void js_session_finalizer(JSRuntime *rt, JSValue val) {
@@ -1266,7 +1260,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
                     switch_channel_wait_for_state_timeout(switch_core_session_get_channel(jss->session), CS_SOFT_EXECUTE, 5000);
                 } else {
                     has_error = SWITCH_TRUE;
-                    error = JS_ThrowTypeError(ctx, "Originate failed: %s", switch_channel_cause2str(h_cause));
+                    error = JS_ThrowTypeError(ctx, "Couldn't create a new session (%s)", switch_channel_cause2str(h_cause));
                     goto fail;
                 }
             }
@@ -1367,7 +1361,7 @@ JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, J
     void *bp = NULL;
 
     if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
     class_id = js_seesion_get_classid(ctx);
