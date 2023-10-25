@@ -4,49 +4,13 @@
  **/
 #include "mod_quickjs.h"
 
-static struct {
-    switch_mutex_t          *mutex;
-    switch_mutex_t          *mutex_scripts_map;
-    switch_hash_t           *scripts_map;
-    size_t                  cfg_rt_mem_limit;
-    size_t                  cfg_rt_stk_size;
-    uint8_t                 fl_ready;
-    uint8_t                 fl_shutdown;
-    int                     active_threads;
-} globals;
+globals_t globals;
 
 SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load);
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown);
 SWITCH_MODULE_DEFINITION(mod_quickjs, mod_quickjs_load, mod_quickjs_shutdown, NULL);
 
 static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj);
-static script_t *script_lookup(char *id);
-static uint32_t script_sem_take(script_t *script);
-static void script_sem_release(script_t *script);
-
-// ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void ctx_dump_error(script_t *script, JSContext *ctx) {
-    JSValue exception_val = JS_GetException(ctx);
-
-    if(JS_IsError(ctx, exception_val)) {
-        JSValue stk_val = JS_GetPropertyStr(ctx, exception_val, "stack");
-        const char *err_str = JS_ToCString(ctx, exception_val);
-        const char *stk_str = (JS_IsUndefined(stk_val) ? NULL : JS_ToCString(ctx, stk_val));
-
-        if(script) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "(%s:%s)\n%s %s\n", script->id, script->name, (err_str ? err_str : "[exception]"), stk_str);
-        } else {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s %s\n", (err_str ? err_str : "[exception]"), stk_str);
-        }
-
-        if(err_str) JS_FreeCString(ctx, err_str);
-        if(stk_str) JS_FreeCString(ctx, stk_str);
-
-        JS_FreeValue(ctx, stk_val);
-    }
-
-    JS_FreeValue(ctx, exception_val);
-}
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -56,7 +20,8 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, J
 
     if(argc > 1) {
         const char *lvl_str, *msg_str;
-        lvl_str = JS_ToCString(ctx, argv[0]);
+
+        lvl_str = (QJS_IS_NULL(argv[0]) ? NULL : JS_ToCString(ctx, argv[0]));
         if(!zstr(lvl_str)) {
             level = switch_log_str2level(lvl_str);
         }
@@ -106,8 +71,12 @@ static JSValue js_global_set(JSContext *ctx, JSValueConst this_val, int argc, JS
         return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: varName");
+    }
+
     var_str = JS_ToCString(ctx, argv[0]);
-    val_str = JS_ToCString(ctx, argv[1]);
+    val_str = (QJS_IS_NULL(argv[0]) ? NULL : JS_ToCString(ctx, argv[1]));
 
     switch_core_set_variable(var_str, val_str);
 
@@ -123,6 +92,10 @@ static JSValue js_global_get(JSContext *ctx, JSValueConst this_val, int argc, JS
 
     if(argc < 1) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: varName");
     }
 
     var_str = JS_ToCString(ctx, argv[0]);
@@ -150,7 +123,7 @@ static JSValue js_exit(JSContext *ctx, JSValueConst this_val, int argc, JSValueC
         return JS_EXCEPTION;
     }
 
-    exit_code = JS_ToCString(ctx, argv[0]);
+    exit_code = (QJS_IS_NULL(argv[0]) ? NULL : JS_ToCString(ctx, argv[0]));
     if(zstr(exit_code)) {
         return JS_EXCEPTION;
     }
@@ -169,12 +142,12 @@ static JSValue js_system(JSContext *ctx, JSValueConst this_val, int argc, JSValu
         return JS_FALSE;
     }
 
-    cmd = JS_ToCString(ctx, argv[0]);
-    if(zstr(cmd)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_UNDEFINED;
     }
 
-    result = switch_system(cmd, SWITCH_TRUE);
+    cmd = JS_ToCString(ctx, argv[0]);
+    result = switch_system(cmd, true);
     JS_FreeCString(ctx, cmd);
 
     return JS_NewInt32(ctx, result);
@@ -191,16 +164,16 @@ static JSValue js_api_execute(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    api_str = JS_ToCString(ctx, argv[0]);
-    arg_str = (argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL);
-
-    if(zstr(api_str)) {
-        return JS_UNDEFINED;
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: api");
     }
+
+    api_str = JS_ToCString(ctx, argv[0]);
+    arg_str = (argc > 1 && !QJS_IS_NULL(argv[1]) ? JS_ToCString(ctx, argv[1]) : NULL);
 
     script = JS_GetContextOpaque(ctx);
     if(!script) {
-        return JS_ThrowTypeError(ctx, "Invalid ctx");
+        return JS_ThrowTypeError(ctx, "Malformed ctx");
     }
 
     SWITCH_STANDARD_STREAM(stream);
@@ -222,11 +195,11 @@ static JSValue js_md5(JSContext *ctx, JSValueConst this_val, int argc, JSValueCo
         return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    str = JS_ToCString(ctx, argv[0]);
-    if(zstr(str)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_UNDEFINED;
     }
 
+    str = JS_ToCString(ctx, argv[0]);
     switch_md5_string(digest, (void *) str, strlen(str));
     JS_FreeCString(ctx, str);
 
@@ -248,12 +221,15 @@ static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     }
 
     script = JS_GetContextOpaque(ctx);
-    if(!script) { return JS_ThrowTypeError(ctx, "Invalid ctx"); }
+    if(!script) {
+        return JS_ThrowTypeError(ctx, "Malformed ctx");
+    }
 
-    path = JS_ToCString(ctx, argv[0]);
-    if(zstr(path)) {
+    if(QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: filename");
     }
+
+    path = JS_ToCString(ctx, argv[0]);
 
     if(switch_file_exists(path, NULL) == SWITCH_STATUS_SUCCESS) {
         path_local = strdup(path);
@@ -287,7 +263,7 @@ static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 
         ret_val = JS_Eval(ctx, buf, flen, path_local, JS_EVAL_TYPE_GLOBAL);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(script, ctx);
+            js_ctx_dump_error(script, ctx);
             JS_ResetUncatchableError(ctx);
         }
 
@@ -320,124 +296,7 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     return js_session_ext_bridge(ctx, this_val, argc, argv);
 }
 
-switch_status_t js_register_classid(JSRuntime *rt, const char *class_name, JSClassID class_id) {
-    switch_status_t status = SWITCH_STATUS_FALSE;
-    script_t *script = NULL;
-    JSClassID *ptr = NULL;
-
-    switch_assert(rt);
-
-    script = JS_GetRuntimeOpaque(rt);
-    switch_assert(script);
-
-    if(script_sem_take(script)) {
-        if(!(ptr = switch_core_alloc(script->pool, sizeof(JSClassID)))) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-            script_sem_release(script);
-            goto out;
-        }
-        memcpy(ptr, &class_id, sizeof(JSClassID));
-
-        switch_mutex_lock(script->mutex_classes_map);
-        switch_core_hash_insert(script->classes_map, class_name, ptr);
-        switch_mutex_unlock(script->mutex_classes_map);
-
-        script_sem_release(script);
-        status = SWITCH_STATUS_SUCCESS;
-    }
-out:
-    return status;
-}
-
-JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name) {
-    script_t *script = NULL;
-    JSClassID *ptr = NULL, id = 0;
-
-    switch_assert(rt);
-
-    script = JS_GetRuntimeOpaque(rt);
-    switch_assert(script);
-
-
-    if(script_sem_take(script)) {
-        switch_mutex_lock(script->mutex_classes_map);
-        ptr = switch_core_hash_find(script->classes_map, class_name);
-        if(ptr) {
-            id = (JSClassID) *ptr;
-        }
-        switch_mutex_unlock(script->mutex_classes_map);
-        script_sem_release(script);
-    }
-
-    return id;
-}
-
 // ---------------------------------------------------------------------------------------------------------------------------------------------
-void launch_thread(switch_memory_pool_t *pool, switch_thread_start_t fun, void *data) {
-    switch_threadattr_t *attr = NULL;
-    switch_thread_t *thread = NULL;
-
-    switch_threadattr_create(&attr, pool);
-    switch_threadattr_detach_set(attr, 1);
-    switch_threadattr_stacksize_set(attr, SWITCH_THREAD_STACKSIZE);
-    switch_thread_create(&thread, attr, fun, data, pool);
-
-    switch_mutex_lock(globals.mutex);
-    globals.active_threads++;
-    switch_mutex_unlock(globals.mutex);
-
-    return;
-}
-
-static switch_status_t new_uuid(char **uuid, switch_memory_pool_t *pool) {
-    char uuid_str[SWITCH_UUID_FORMATTED_LENGTH + 1];
-
-    memset((char *)uuid_str, '\0' , sizeof(uuid_str));
-    switch_uuid_str(uuid_str, sizeof(uuid_str));
-
-    *uuid = switch_core_strdup(pool, uuid_str);
-
-    return SWITCH_STATUS_SUCCESS;
-}
-
-static script_t *script_lookup(char *id) {
-    script_t *script = NULL;
-
-    if(zstr(id)) {
-        return NULL;
-    }
-
-    switch_mutex_lock(globals.mutex_scripts_map);
-    script = switch_core_hash_find(globals.scripts_map, id);
-    switch_mutex_unlock(globals.mutex_scripts_map);
-
-    return script;
-}
-
-static uint32_t script_sem_take(script_t *script) {
-    uint32_t status = SWITCH_FALSE;
-
-    if(!script) { return SWITCH_FALSE; }
-
-    switch_mutex_lock(script->mutex);
-    if(script->fl_ready) {
-        status = SWITCH_TRUE;
-        script->sem++;
-    }
-    switch_mutex_unlock(script->mutex);
-    return status;
-}
-
-static void script_sem_release(script_t *script) {
-    switch_assert(script);
-
-    switch_mutex_lock(script->mutex);
-    if(script->sem) {
-        script->sem--;
-    }
-    switch_mutex_unlock(script->mutex);
-}
-
 static switch_status_t script_load(script_t *script) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     switch_file_t *fd = NULL;
@@ -454,17 +313,17 @@ static switch_status_t script_load(script_t *script) {
     script->script_len = switch_file_get_size(fd);
     if(!script->script_len) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Script file is empty: %s\n", script->path);
-	switch_goto_status(SWITCH_STATUS_FALSE, out);
+        switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
     if((script->script_buf = switch_core_alloc(script->pool, script->script_len + 1)) == NULL)  {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
-	switch_goto_status(SWITCH_STATUS_MEMERR, out);
+        switch_goto_status(SWITCH_STATUS_MEMERR, out);
     }
 
     if(switch_file_read(fd, script->script_buf, &script->script_len) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't read file\n");
-	switch_goto_status(SWITCH_STATUS_FALSE, out);
+        switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
     script->script_buf[script->script_len] = '\0';
@@ -594,7 +453,8 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 
     global_obj = JS_GetGlobalObject(ctx);
 
-    script->fl_ready = SWITCH_TRUE; /* temporary */
+    /* register classes */
+    script->fl_ready = true; // temporary
     js_session_class_register(ctx, global_obj);
     js_codec_class_register(ctx, global_obj);
     js_file_handle_class_register(ctx, global_obj);
@@ -611,7 +471,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_odbc_class_register(ctx, global_obj);
     fl_odbc_enable = 1;
 #endif
-    script->fl_ready = SWITCH_FALSE; /* unset */
+    script->fl_ready = false; // unset
 
     flags_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, flags_obj, "odbcEnabled", JS_NewString(ctx, (fl_odbc_enable ? "true" : "false")));
@@ -645,6 +505,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
         JS_SetPropertyStr(ctx, global_obj, "argv", JS_NewArray(ctx));
     }
 
+    /* global fncs */
     JS_SetPropertyStr(ctx, global_obj, "console_log", JS_NewCFunction(ctx, js_console_log, "console_log", 0));
     JS_SetPropertyStr(ctx, global_obj, "consoleLog", JS_NewCFunction(ctx, js_console_log, "consoleLog", 0));
     JS_SetPropertyStr(ctx, global_obj, "include", JS_NewCFunction(ctx, js_include, "include", 1));
@@ -657,6 +518,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
 
+    // todo: will do over...
     if(script->session) {
         uint32_t clen = 0;
         switch_channel_t *channel = switch_core_session_get_channel(script->session);
@@ -664,19 +526,19 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 
         clen = (script->script_len + strlen(script_tmp_buff));
 
-        switch_zmalloc(script_buf_local, clen + 1); // for '\0' at the end
+        switch_zmalloc(script_buf_local, clen + 1);
         memcpy(script_buf_local, script_tmp_buff, strlen(script_tmp_buff));
         memcpy(script_buf_local + strlen(script_tmp_buff), script->script_buf, script->script_len);
 
-        script->fl_ready = SWITCH_TRUE;
+        script->fl_ready = true;
         result = JS_Eval(ctx, script_buf_local, clen, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
     } else {
-        script->fl_ready = SWITCH_TRUE;
+        script->fl_ready = true;
         result = JS_Eval(ctx, script->script_buf, script->script_len, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
     }
 
     if(JS_IsException(result)) {
-        ctx_dump_error(script, ctx);
+        js_ctx_dump_error(script, ctx);
         JS_ResetUncatchableError(ctx);
     }
 
@@ -685,14 +547,17 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 out:
     JS_FreeValue(ctx, global_obj);
 
-    script->fl_ready = SWITCH_FALSE;
-    script->fl_destroyed = SWITCH_TRUE;
+    script->fl_ready = false;
+    script->fl_destroyed = true;
 
     switch_safe_free(script_tmp_buff);
     switch_safe_free(script_buf_local);
 
-    while(script->sem > 0) {
-        switch_yield(100000);
+    if(script->sem) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for unlock (sid=%s, sem=%i)\n", script->id, script->sem);
+        while(script->sem > 0) {
+            switch_yield(100000);
+        }
     }
 
     if(ctx) {
@@ -712,9 +577,7 @@ out:
     switch_core_destroy_memory_pool(&script->pool);
 
     if(thread) {
-        switch_mutex_lock(globals.mutex);
-        if(globals.active_threads > 0) globals.active_threads--;
-        switch_mutex_unlock(globals.mutex);
+        thread_finished();
     }
 
     return NULL;
@@ -722,7 +585,7 @@ out:
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 static void event_handler_shutdown(switch_event_t *event) {
-    globals.fl_shutdown = SWITCH_TRUE;
+    globals.fl_shutdown = true;
 }
 
 #define CMD_SYNTAX "\n" \
@@ -768,7 +631,7 @@ SWITCH_STANDARD_API(quickjs_cmd) {
     if(strcasecmp(argv[0], "run") == 0) {
         char *script_args = (argc > 2 ? ((char *)cmd + (strlen(argv[0]) + strlen(argv[1]) + 2)) : NULL);
 
-        if((status = script_launch(session, argv[1], script_args, SWITCH_TRUE)) == SWITCH_STATUS_SUCCESS) {
+        if((status = script_launch(session, argv[1], script_args, true)) == SWITCH_STATUS_SUCCESS) {
             stream->write_function(stream, "+OK\n");
         } else {
             stream->write_function(stream, "-ERR: %i\n", status);
@@ -783,7 +646,7 @@ SWITCH_STANDARD_API(quickjs_cmd) {
         script = script_lookup(id);
         if(script_sem_take(script)) {
             if(script->fl_ready && !script->fl_destroyed) {
-                script->fl_interrupt = SWITCH_TRUE;
+                script->fl_interrupt = true;
                 success++;
             }
             script_sem_release(script);
@@ -817,7 +680,7 @@ SWITCH_STANDARD_APP(quickjs_app) {
     script_name = argv[0];
     script_args = (argc > 1 ? ((char *)data + (strlen(argv[0]) + 1)) : NULL);
 
-    if((status = script_launch(session, script_name, script_args, SWITCH_FALSE)) != SWITCH_STATUS_SUCCESS) {
+    if((status = script_launch(session, script_name, script_args, false)) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't launch: %s\n", script_name);
     }
     goto out;
@@ -871,7 +734,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
             char *args = (char *) switch_xml_attr_soft(xml_script, "args");
 
             if(!zstr(path)) {
-                if(script_launch(NULL, path, args, SWITCH_TRUE) != SWITCH_STATUS_SUCCESS) {
+                if(script_launch(NULL, path, args, true) != SWITCH_STATUS_SUCCESS) {
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Failed to launch script: %s", path);
                 }
             }
@@ -887,7 +750,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
         switch_goto_status(SWITCH_STATUS_GENERR, done);
     }
 
-    globals.fl_shutdown = SWITCH_FALSE;
+    globals.fl_shutdown = false;
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "quckjs (%s)\n", MOD_VERSION);
 
 done:
@@ -904,7 +767,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
 
     switch_event_unbind_callback(event_handler_shutdown);
 
-    globals.fl_shutdown = SWITCH_TRUE;
+    globals.fl_shutdown = true;
     while(globals.active_threads > 0) {
         switch_yield(100000);
     }
@@ -915,7 +778,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
         script = (script_t *) hval;
 
         if(script_sem_take(script)) {
-            script->fl_interrupt = SWITCH_TRUE;
+            script->fl_interrupt = true;
             script_sem_release(script);
         }
     }

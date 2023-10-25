@@ -559,7 +559,7 @@ static JSValue js_file_dir_list(JSContext *ctx, JSValueConst this_val, int argc,
 
         ret_val = JS_Call(ctx, js_cb, this_val, 2, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, ctx);
+            js_ctx_dump_error(NULL, ctx);
             JS_ResetUncatchableError(ctx);
         }
 

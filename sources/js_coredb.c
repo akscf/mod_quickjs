@@ -312,7 +312,7 @@ static int db_callback(void *udata, int argc, char **argv, char **columnNames) {
 
     ret_val = JS_Call(ctx, js_coredb->callback, JS_UNDEFINED, 1, (JSValueConst *) args);
     if(JS_IsException(ret_val)) {
-        ctx_dump_error(NULL, ctx);
+        js_ctx_dump_error(NULL, ctx);
         JS_ResetUncatchableError(ctx);
     }
 

@@ -424,7 +424,7 @@ static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_
         JS_ToUint32(ctx, &digit_timeout, argv[9]);
     }
     if(argc > 10) {
-        transfer_on_failure = ((QJS_IS_NULL(argv[10]) : NULL ? JS_ToCString(ctx, argv[10]));
+        transfer_on_failure = (QJS_IS_NULL(argv[10]) ? NULL : JS_ToCString(ctx, argv[10]));
     }
 
     if(max_digits < min_digits) {
@@ -1042,7 +1042,7 @@ static switch_status_t sys_session_hangup_hook(switch_core_session_t *session) {
                 args[0] = JS_NewInt32(ctx, state);
                 ret_val = JS_Call(ctx, jss->on_hangup, JS_UNDEFINED, 1, (JSValueConst *) args);
                 if(JS_IsException(ret_val)) {
-                    ctx_dump_error(NULL, ctx);
+                    js_ctx_dump_error(NULL, ctx);
                     JS_ResetUncatchableError(ctx);
                 }
                 JS_FreeValue(ctx, args[0]);
@@ -1069,7 +1069,7 @@ static switch_status_t js_record_input_callback(switch_core_session_t *session, 
 
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, ctx);
+            js_ctx_dump_error(NULL, ctx);
             JS_ResetUncatchableError(ctx);
         } else if(JS_IsBool(ret_val)) {
             status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
@@ -1099,7 +1099,7 @@ static switch_status_t js_playback_input_callback(switch_core_session_t *session
 
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, ctx);
+            js_ctx_dump_error(NULL, ctx);
             JS_ResetUncatchableError(ctx);
         } else if(JS_IsBool(ret_val)) {
             status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
@@ -1138,7 +1138,7 @@ static switch_status_t js_collect_input_callback(switch_core_session_t *session,
 
         ret_val = JS_Call(ctx, cb_state->function, JS_UNDEFINED, 4, (JSValueConst *) args);
         if(JS_IsException(ret_val)) {
-            ctx_dump_error(NULL, ctx);
+            js_ctx_dump_error(NULL, ctx);
             JS_ResetUncatchableError(ctx);
         } else if(JS_IsBool(ret_val)) {
             status = (JS_ToBool(ctx, ret_val) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE);
