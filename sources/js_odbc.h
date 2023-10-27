@@ -4,7 +4,7 @@
  **/
 #ifndef JS_ODBC_H
 #define JS_ODBC_H
-#include <mod_quickjs.h>
+#include "mod_quickjs.h"
 
 #define JS_ODBC_ENABLE
 

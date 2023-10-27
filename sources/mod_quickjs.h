@@ -11,19 +11,6 @@
 #include <switch_curl.h>
 #include <quickjs.h>
 #include <quickjs-libc.h>
-#include <js_xml.h>
-#include <js_dtmf.h>
-#include <js_odbc.h>
-#include <js_coredb.h>
-#include <js_codec.h>
-#include <js_file.h>
-#include <js_socket.h>
-#include <js_event.h>
-#include <js_coredb.h>
-#include <js_filehandle.h>
-#include <js_eventhandler.h>
-#include <js_session.h>
-#include <js_curl.h>
 
 #ifndef true
  #define true SWITCH_TRUE
@@ -36,7 +23,7 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define QJS_IS_NULL(jsV)  (JS_IsNull(jsV) || JS_IsUndefined(jsV) || JS_IsUninitialized(jsV))
 
-#define MOD_VERSION "1.4 (a2)"
+#define MOD_VERSION "1.4 (a3)"
 
 typedef struct {
     switch_mutex_t          *mutex;
@@ -46,7 +33,6 @@ typedef struct {
     size_t                  cfg_rt_stk_size;
     uint8_t                 fl_ready;
     uint8_t                 fl_shutdown;
-    uint32_t                jbseq;
     int                     active_threads;
 } globals_t;
 
@@ -64,7 +50,7 @@ typedef struct {
     const char              *session_id;
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
-    switch_mutex_t          *mutex_classes_map;
+    switch_mutex_t          *classes_map_mutex;
     switch_hash_t           *classes_map;
     switch_core_session_t   *session;
     JSContext               *ctx;
@@ -73,7 +59,6 @@ typedef struct {
 } script_t;
 
 /* utils.c */
-uint32_t gen_job_id();
 char *safe_pool_strdup(switch_memory_pool_t *pool, const char *str);
 uint8_t *safe_pool_bufdup(switch_memory_pool_t *pool, uint8_t *buffer, switch_size_t len);
 
@@ -87,6 +72,7 @@ JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name);
 switch_status_t new_uuid(char **uuid, switch_memory_pool_t *pool);
 uint32_t script_sem_take(script_t *script);
 void script_sem_release(script_t *script);
+void script_wait_unlock(script_t *script);
 script_t *script_lookup(char *id);
 
 

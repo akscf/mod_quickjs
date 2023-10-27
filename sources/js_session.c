@@ -3,6 +3,12 @@
  * https://github.com/akscf/
  **/
 #include "js_session.h"
+#include "js_file.h"
+#include "js_dtmf.h"
+#include "js_event.h"
+#include "js_codec.h"
+#include "js_eventhandler.h"
+#include "js_filehandle.h"
 
 #define CLASS_NAME                  "Session"
 #define PROP_NAME                   0

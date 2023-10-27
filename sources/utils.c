@@ -78,6 +78,18 @@ void script_sem_release(script_t *script) {
     switch_mutex_unlock(script->mutex);
 }
 
+void script_wait_unlock(script_t *script) {
+    uint8_t fl_wloop = true;
+
+    while(fl_wloop) {
+        switch_mutex_lock(script->mutex);
+        fl_wloop = (script->sem != 0);
+        switch_mutex_unlock(script->mutex);
+
+        switch_yield(100000);
+    }
+}
+
 switch_status_t js_register_classid(JSRuntime *rt, const char *class_name, JSClassID class_id) {
     switch_status_t status = SWITCH_STATUS_FALSE;
     script_t *script = NULL;
@@ -96,9 +108,9 @@ switch_status_t js_register_classid(JSRuntime *rt, const char *class_name, JSCla
         }
         memcpy(ptr, &class_id, sizeof(JSClassID));
 
-        switch_mutex_lock(script->mutex_classes_map);
+        switch_mutex_lock(script->classes_map_mutex);
         switch_core_hash_insert(script->classes_map, class_name, ptr);
-        switch_mutex_unlock(script->mutex_classes_map);
+        switch_mutex_unlock(script->classes_map_mutex);
 
         script_sem_release(script);
         status = SWITCH_STATUS_SUCCESS;
@@ -118,12 +130,12 @@ JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name) {
 
 
     if(script_sem_take(script)) {
-        switch_mutex_lock(script->mutex_classes_map);
+        switch_mutex_lock(script->classes_map_mutex);
         ptr = switch_core_hash_find(script->classes_map, class_name);
         if(ptr) {
             id = (JSClassID) *ptr;
         }
-        switch_mutex_unlock(script->mutex_classes_map);
+        switch_mutex_unlock(script->classes_map_mutex);
         script_sem_release(script);
     }
 
@@ -178,14 +190,3 @@ uint8_t *safe_pool_bufdup(switch_memory_pool_t *pool, uint8_t *buffer, switch_si
     return buffer_local;
 }
 
-/* temporary */
-uint32_t gen_job_id() {
-    uint32_t jid = 0;
-
-    switch_mutex_lock(globals.mutex);
-    jid = globals.jbseq + 1;
-    globals.jbseq = jid;
-    switch_mutex_unlock(globals.mutex);
-
-    return jid;
-}

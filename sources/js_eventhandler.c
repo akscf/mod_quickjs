@@ -3,11 +3,13 @@
  * https://github.com/akscf/
  **/
 #include "js_eventhandler.h"
+#include "js_session.h"
+#include "js_event.h"
 
 #define CLASS_NAME      "EventHandler"
 #define PROP_IS_READY   0
 
-#define MAX_QUEUE_LEN   100000
+#define QUEUE_MAX_LEN   100000
 
 #define EH_SANITY_CHECK() if (!js_eventhandler || !js_eventhandler->event_queue) { \
            return JS_ThrowTypeError(ctx, "Handler is not initialized"); \
@@ -347,7 +349,7 @@ static JSValue js_eventhandler_contructor(JSContext *ctx, JSValueConst new_targe
     }
 
     switch_mutex_init(&js_eventhandler->mutex, SWITCH_MUTEX_NESTED, pool);
-    switch_queue_create(&js_eventhandler->event_queue, MAX_QUEUE_LEN, pool);
+    switch_queue_create(&js_eventhandler->event_queue, QUEUE_MAX_LEN, pool);
     switch_core_hash_init(&js_eventhandler->custom_events);
 
     js_eventhandler->filters = NULL;

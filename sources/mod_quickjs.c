@@ -3,6 +3,19 @@
  * https://github.com/akscf/
  **/
 #include "mod_quickjs.h"
+#include "js_xml.h"
+#include "js_dtmf.h"
+#include "js_odbc.h"
+#include "js_coredb.h"
+#include "js_codec.h"
+#include "js_file.h"
+#include "js_socket.h"
+#include "js_event.h"
+#include "js_coredb.h"
+#include "js_filehandle.h"
+#include "js_eventhandler.h"
+#include "js_session.h"
+#include "js_curl.h"
 
 globals_t globals;
 
@@ -382,7 +395,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
 
     switch_core_hash_init(&script->classes_map);
     switch_mutex_init(&script->mutex, SWITCH_MUTEX_NESTED, pool);
-    switch_mutex_init(&script->mutex_classes_map, SWITCH_MUTEX_NESTED, pool);
+    switch_mutex_init(&script->classes_map_mutex, SWITCH_MUTEX_NESTED, pool);
 
     status = script_load(script);
     if(status != SWITCH_STATUS_SUCCESS) {
@@ -554,10 +567,8 @@ out:
     switch_safe_free(script_buf_local);
 
     if(script->sem) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for unlock (sid=%s, sem=%i)\n", script->id, script->sem);
-        while(script->sem > 0) {
-            switch_yield(100000);
-        }
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for unlock (scipt-id=%s, sem=%i)\n", script->id, script->sem);
+        script_wait_unlock(script);
     }
 
     if(ctx) {
@@ -763,13 +774,20 @@ done:
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
     switch_hash_index_t *hi = NULL;
     script_t *script = NULL;
+    uint8_t fl_wloop = true;
     void *hval = NULL;
 
     switch_event_unbind_callback(event_handler_shutdown);
 
     globals.fl_shutdown = true;
-    while(globals.active_threads > 0) {
-        switch_yield(100000);
+    if(globals.active_threads > 0) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for termination '%d' threads...\n", globals.active_threads);
+        while(fl_wloop) {
+            switch_mutex_lock(globals.mutex);
+            fl_wloop = (globals.active_threads > 0);
+            switch_mutex_unlock(globals.mutex);
+            switch_yield(100000);
+        }
     }
 
     switch_mutex_lock(globals.mutex_scripts_map);

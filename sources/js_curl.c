@@ -3,7 +3,6 @@
  * https://github.com/akscf/
  **/
 #include "js_curl.h"
-#include "curl_hlp.h"
 
 #define CLASS_NAME              "CURL"
 #define PROP_URL                1
@@ -23,99 +22,10 @@
 
 #define DEFAULT_CONTENT_TYPE    "text/plain"
 
-#define CURL_SANITY_CHECK() if (!js_curl) { \
-           return JS_ThrowTypeError(ctx, "CURL is not initialized"); \
-        }
-
-typedef struct {
-    uint32_t                jid;
-    switch_memory_pool_t    *pool;
-    curl_conf_t             *curl_conf;
-    js_curl_t               *js_curl_ref;
-} js_creq_conf_t;
-
 static void js_curl_finalizer(JSRuntime *rt, JSValue val);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-static switch_status_t js_curl_result_alloc(js_curl_result_t **result, uint32_t http_code, uint8_t *body, uint32_t body_len) {
-    js_curl_result_t *result_local = NULL;
-
-    switch_zmalloc(result_local, sizeof(js_curl_result_t));
-    result_local->http_code = http_code;
-    result_local->body_len = body_len;
-
-    if(body_len > 0) {
-        switch_malloc(result_local->body, body_len);
-        memcpy(result_local->body, body, body_len);
-    }
-
-    *result = result_local;
-    return SWITCH_STATUS_SUCCESS;
-}
-static void js_curl_result_free(js_curl_result_t *result) {
-    if(result) {
-        switch_safe_free(result->body);
-        switch_safe_free(result);
-    }
-}
-static void js_curl_queue_clean(switch_queue_t *queue) {
-    void *data = NULL;
-
-    if(!queue || !switch_queue_size(queue)) { return; }
-
-    while(switch_queue_trypop(queue, &data) == SWITCH_STATUS_SUCCESS) {
-        if(data) { js_curl_result_free((js_curl_result_t *) data); }
-    }
-}
-
-static switch_status_t js_creq_conf_alloc(js_creq_conf_t **conf) {
-    switch_status_t status = SWITCH_STATUS_FALSE;
-    switch_memory_pool_t *pool = NULL;
-    js_creq_conf_t *conf_local = NULL;
-    curl_conf_t *curl_conf = NULL;
-
-    if((status = switch_core_new_memory_pool(&pool)) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
-        switch_goto_status(SWITCH_STATUS_GENERR, out);
-    }
-    if((conf_local = switch_core_alloc(pool, sizeof(js_creq_conf_t))) == NULL) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "mem fail\n");
-        switch_goto_status(SWITCH_STATUS_GENERR, out);
-    }
-    if((status = curl_config_alloc(&curl_conf, pool, true)) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "mem fail\n");
-        switch_goto_status(SWITCH_STATUS_GENERR, out);
-    }
-    conf_local->pool = pool;
-    conf_local->curl_conf = curl_conf;
-    conf_local->jid = JID_NONE;
-
-    *conf = conf_local;
-out:
-    if(status != SWITCH_STATUS_SUCCESS) {
-        if(curl_conf) {
-            curl_config_free(curl_conf);
-        }
-        if(pool) {
-            switch_core_destroy_memory_pool(&pool);
-        }
-    }
-    return status;
-}
-
-static void js_creq_conf_free(js_creq_conf_t *conf) {
-    switch_memory_pool_t *pool = (conf ? conf->pool : NULL);
-    curl_conf_t *curl_conf = (conf ? conf->curl_conf : NULL);;
-
-    if(curl_conf) {
-        curl_config_free(curl_conf);
-    }
-    if(pool) {
-        switch_core_destroy_memory_pool(&pool);
-    }
-}
-
-static js_curl_result_t *js_curl_request_exec(js_creq_conf_t *creq_conf) {
+static js_curl_result_t *js_curl_request_exec(js_curl_creq_conf_t *creq_conf) {
     switch_status_t status = SWITCH_STATUS_FALSE;
     curl_conf_t *curl_conf = creq_conf->curl_conf;
     js_curl_result_t *result = NULL;
@@ -136,8 +46,8 @@ static js_curl_result_t *js_curl_request_exec(js_creq_conf_t *creq_conf) {
 }
 
 static void *SWITCH_THREAD_FUNC js_curl_request_exec_thread(switch_thread_t *thread, void *obj) {
-    volatile js_creq_conf_t *_ref = (js_creq_conf_t *) obj;
-    js_creq_conf_t *creq_conf = (js_creq_conf_t *) _ref;
+    volatile js_curl_creq_conf_t *_ref = (js_curl_creq_conf_t *) obj;
+    js_curl_creq_conf_t *creq_conf = (js_curl_creq_conf_t *) _ref;
     js_curl_t *js_curl = creq_conf->js_curl_ref;
     js_curl_result_t *res = NULL;
 
@@ -145,31 +55,25 @@ static void *SWITCH_THREAD_FUNC js_curl_request_exec_thread(switch_thread_t *thr
     if(res) {
         res->jid = creq_conf->jid;
         if(switch_queue_trypush(js_curl->events, res) != SWITCH_STATUS_SUCCESS) {
-            js_curl_result_free(res);
+            js_curl_result_free(&res);
         }
     }
 
-    switch_mutex_lock(js_curl->mutex);
-    if(js_curl->jobs > 0) js_curl->jobs--;
-    switch_mutex_unlock(js_curl->mutex);
+    js_curl_creq_conf_free(&creq_conf);
 
-    js_creq_conf_free(creq_conf);
+    js_curl_job_finished(js_curl);
     thread_finished();
 
     return NULL;
 }
 
-static uint32_t js_curl_request_exec_async(js_creq_conf_t *creq_conf) {
+static uint32_t js_curl_request_exec_async(js_curl_creq_conf_t *creq_conf) {
     uint32_t jid = JID_NONE;
 
-    switch_mutex_lock(creq_conf->js_curl_ref->mutex);
-    creq_conf->js_curl_ref->jobs++;
-    switch_mutex_unlock(creq_conf->js_curl_ref->mutex);
-
-    jid = gen_job_id();
-
-    creq_conf->jid = jid;
-    launch_thread(creq_conf->pool, js_curl_request_exec_thread, creq_conf);
+    if(js_curl_job_can_start(creq_conf->js_curl_ref) == SWITCH_STATUS_SUCCESS) {
+        jid = creq_conf->jid = js_curl_job_next_id(creq_conf->js_curl_ref);
+        launch_thread(creq_conf->pool, js_curl_request_exec_thread, creq_conf);
+    }
 
     return jid;
 }
@@ -437,17 +341,19 @@ static JSValue js_curl_property_set(JSContext *ctx, JSValueConst this_val, JSVal
 static JSValue js_curl_perform_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     switch_status_t status = SWITCH_STATUS_SUCCESS;
-    js_creq_conf_t *creq_conf = NULL;
+    js_curl_creq_conf_t *creq_conf = NULL;
     JSValue ret_obj = JS_FALSE;
 
-    CURL_SANITY_CHECK();
+    if(!js_curl || js_curl->fl_destroying) {
+        return JS_ThrowTypeError(ctx, "Malformed reference");
+    }
 
     if(zstr(js_curl->url)) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "js_curl->url == NULL\n");
         switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
-    if((status = js_creq_conf_alloc(&creq_conf)) != SWITCH_STATUS_SUCCESS) {
+    if((status = js_curl_creq_conf_alloc(&creq_conf)) != SWITCH_STATUS_SUCCESS) {
         switch_goto_status(SWITCH_STATUS_GENERR, out);
     }
 
@@ -521,11 +427,11 @@ static JSValue js_curl_perform_request(JSContext *ctx, JSValueConst this_val, in
             JS_SetPropertyStr(ctx, ret_obj, "body", (res->body_len > 0 ? JS_NewStringLen(ctx, res->body, res->body_len) : JS_UNDEFINED));
             JS_SetPropertyStr(ctx, ret_obj, "code", JS_NewInt32(ctx, res->http_code));
 
-            js_curl_result_free(res);
+            js_curl_result_free(&res);
         }
     }
 out:
-    js_creq_conf_free(creq_conf);
+    js_curl_creq_conf_free(&creq_conf);
     return ret_obj;
 }
 
@@ -535,17 +441,19 @@ out:
 static JSValue js_curl_perform_request_async(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     switch_status_t status = SWITCH_STATUS_SUCCESS;
-    js_creq_conf_t *creq_conf = NULL;
+    js_curl_creq_conf_t *creq_conf = NULL;
     JSValue ret_obj = JS_FALSE;
 
-    CURL_SANITY_CHECK();
+    if(!js_curl || js_curl->fl_destroying) {
+        return JS_ThrowTypeError(ctx, "Malformed reference");
+    }
 
     if(zstr(js_curl->url)) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "js_curl->url == NULL\n");
         switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
-    if((status = js_creq_conf_alloc(&creq_conf)) != SWITCH_STATUS_SUCCESS) {
+    if((status = js_curl_creq_conf_alloc(&creq_conf)) != SWITCH_STATUS_SUCCESS) {
         switch_goto_status(SWITCH_STATUS_GENERR, out);
     }
 
@@ -617,8 +525,34 @@ static JSValue js_curl_perform_request_async(JSContext *ctx, JSValueConst this_v
     }
 out:
     if(status != SWITCH_STATUS_SUCCESS) {
-        js_creq_conf_free(creq_conf);
+        js_curl_creq_conf_free(&creq_conf);
     }
+    return ret_obj;
+}
+
+static JSValue js_curl_get_async_result(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
+    switch_status_t status = SWITCH_STATUS_SUCCESS;
+    js_curl_creq_conf_t *creq_conf = NULL;
+    JSValue ret_obj = JS_UNDEFINED;
+    void *pop = NULL;
+
+    if(!js_curl || js_curl->fl_destroying) {
+        return JS_ThrowTypeError(ctx, "Malformed reference");
+    }
+
+    if(switch_queue_trypop(js_curl->events, &pop) == SWITCH_STATUS_SUCCESS) {
+        js_curl_result_t *cresult = (js_curl_result_t *)pop;
+        if(cresult) {
+            ret_obj = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, ret_obj, "class",JS_NewString(ctx, "CurlResult"));
+            JS_SetPropertyStr(ctx, ret_obj, "jid",  JS_NewInt32(ctx, cresult->jid));
+            JS_SetPropertyStr(ctx, ret_obj, "body", JS_NewStringLen(ctx, cresult->body, cresult->body_len));
+            JS_SetPropertyStr(ctx, ret_obj, "code", JS_NewInt32(ctx, cresult->http_code));
+        }
+        js_curl_result_free(&cresult);
+    }
+
     return ret_obj;
 }
 
@@ -646,22 +580,40 @@ static const JSCFunctionListEntry js_curl_proto_funcs[] = {
     //
     JS_CFUNC_DEF("perform", 1, js_curl_perform_request),
     JS_CFUNC_DEF("performAsync", 1, js_curl_perform_request_async),
+    JS_CFUNC_DEF("getAsyncResult", 1, js_curl_get_async_result),
 };
 
 static void js_curl_finalizer(JSRuntime *rt, JSValue val) {
     js_curl_t *js_curl = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
     switch_memory_pool_t *pool = (js_curl ? js_curl->pool : NULL);
+    uint8_t fl_wloop = true;
 
-    if(!js_curl) {
+    if(!js_curl || js_curl->fl_destroying) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-curl-finalizer: js_curl=%p\n", js_curl);
+    js_curl->fl_destroying = true;
+
+    if(js_curl->events) {
+        js_curl_queue_clean(js_curl);
+        switch_queue_term(js_curl->events);
+    }
+
+    if(js_curl->active_jobs) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for termination of '%d' jobs...\n", js_curl->active_jobs);
+        while(fl_wloop) {
+            switch_mutex_lock(js_curl->mutex);
+            fl_wloop = (js_curl->active_jobs != 0);
+            switch_mutex_unlock(js_curl->mutex);
+            switch_yield(100000);
+        }
+    }
 
     if(pool) {
         switch_core_destroy_memory_pool(&pool);
-        pool = NULL;
     }
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-curl-finalizer: js_curl=%p (destroyed)\n", js_curl);
 
     js_free_rt(rt, js_curl);
 }
@@ -684,7 +636,6 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
     if(argc < 1) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
-
     if(QJS_IS_NULL(argv[0])) {
         err = JS_ThrowTypeError(ctx, "Invalid argument: url");
         goto fail;
@@ -725,8 +676,9 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
     js_curl->credentials = (credentials ? switch_core_strdup(pool, credentials) : NULL);
     js_curl->content_type = (content_type ? switch_core_strdup(pool, content_type) : DEFAULT_CONTENT_TYPE);
     js_curl->request_timeout = timeout;
+    js_curl->fl_destroying = false;
 
-    switch_queue_create(&js_curl->events, 64, pool);
+    switch_queue_create(&js_curl->events, CURL_QUEUE_SIZE, pool);
     if(switch_mutex_init(&js_curl->mutex, SWITCH_MUTEX_NESTED, pool) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "mem fail\n");
         goto fail;
@@ -752,7 +704,6 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
 fail:
     if(js_curl) {
         if(js_curl->events) {
-            js_curl_queue_clean(js_curl->events);
             switch_queue_term(js_curl->events);
         }
         js_free(ctx, js_curl);

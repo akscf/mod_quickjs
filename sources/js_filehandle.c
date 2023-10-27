@@ -3,6 +3,7 @@
  * https://github.com/akscf/
  **/
 #include "js_filehandle.h"
+#include "js_session.h"
 
 #define CLASS_NAME          "FileHandle"
 #define FH_PROP_SPEED       0

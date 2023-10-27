@@ -4,7 +4,7 @@
  **/
 #ifndef CURL_HLP_H
 #define CURL_HLP_H
-#include <mod_quickjs.h>
+#include "mod_quickjs.h"
 
 #define CURL_FIELD_TYPE_SIMPLE  0
 #define CURL_FIELD_TYPE_FILE    1

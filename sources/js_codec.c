@@ -3,6 +3,7 @@
  * https://github.com/akscf/
  **/
 #include "js_codec.h"
+#include "js_session.h"
 
 #define CLASS_NAME              "Codec"
 #define PROP_IS_READY           0

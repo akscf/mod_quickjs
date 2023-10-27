@@ -4,7 +4,7 @@
  **/
 #ifndef JS_SESSION_H
 #define JS_SESSION_H
-#include <mod_quickjs.h>
+#include "mod_quickjs.h"
 
 typedef struct {
     uint8_t                 fl_hup_auto;
