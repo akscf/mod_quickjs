@@ -566,10 +566,7 @@ out:
     switch_safe_free(script_tmp_buff);
     switch_safe_free(script_buf_local);
 
-    if(script->sem) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for unlock (scipt-id=%s, sem=%i)\n", script->id, script->sem);
-        script_wait_unlock(script);
-    }
+    script_wait_unlock(script);
 
     if(ctx) {
         JS_FreeContext(ctx);
@@ -780,15 +777,6 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
     switch_event_unbind_callback(event_handler_shutdown);
 
     globals.fl_shutdown = true;
-    if(globals.active_threads > 0) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for termination '%d' threads...\n", globals.active_threads);
-        while(fl_wloop) {
-            switch_mutex_lock(globals.mutex);
-            fl_wloop = (globals.active_threads > 0);
-            switch_mutex_unlock(globals.mutex);
-            switch_yield(100000);
-        }
-    }
 
     switch_mutex_lock(globals.mutex_scripts_map);
     for(hi = switch_core_hash_first_iter(globals.scripts_map, hi); hi; hi = switch_core_hash_next(&hi)) {
@@ -801,6 +789,23 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
         }
     }
     switch_safe_free(hi);
+    switch_mutex_unlock(globals.mutex_scripts_map);
+
+    switch_mutex_lock(globals.mutex);
+    fl_wloop = (globals.active_threads > 0);
+    switch_mutex_unlock(globals.mutex);
+
+    if(fl_wloop) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for termination '%d' threads...\n", globals.active_threads);
+        while(fl_wloop) {
+            switch_mutex_lock(globals.mutex);
+            fl_wloop = (globals.active_threads > 0);
+            switch_mutex_unlock(globals.mutex);
+            switch_yield(100000);
+        }
+    }
+
+    switch_mutex_lock(globals.mutex_scripts_map);
     switch_core_hash_destroy(&globals.scripts_map);
     switch_mutex_unlock(globals.mutex_scripts_map);
 

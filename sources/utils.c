@@ -81,12 +81,18 @@ void script_sem_release(script_t *script) {
 void script_wait_unlock(script_t *script) {
     uint8_t fl_wloop = true;
 
-    while(fl_wloop) {
-        switch_mutex_lock(script->mutex);
-        fl_wloop = (script->sem != 0);
-        switch_mutex_unlock(script->mutex);
+    switch_mutex_lock(script->mutex);
+    fl_wloop = (script->sem != 0);
+    switch_mutex_unlock(script->mutex);
 
-        switch_yield(100000);
+    if(fl_wloop) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for unlock (scipt-id=%s, sem=%i)\n", script->id, script->sem);
+        while(fl_wloop) {
+            switch_mutex_lock(script->mutex);
+            fl_wloop = (script->sem != 0);
+            switch_mutex_unlock(script->mutex);
+            switch_yield(100000);
+        }
     }
 }
 

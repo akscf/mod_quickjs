@@ -599,7 +599,11 @@ static void js_curl_finalizer(JSRuntime *rt, JSValue val) {
         switch_queue_term(js_curl->events);
     }
 
-    if(js_curl->active_jobs) {
+    switch_mutex_lock(js_curl->mutex);
+    fl_wloop = (js_curl->active_jobs != 0);
+    switch_mutex_unlock(js_curl->mutex);
+
+    if(fl_wloop) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for termination of '%d' jobs...\n", js_curl->active_jobs);
         while(fl_wloop) {
             switch_mutex_lock(js_curl->mutex);
