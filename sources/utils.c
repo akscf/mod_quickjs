@@ -86,7 +86,7 @@ void script_wait_unlock(script_t *script) {
     switch_mutex_unlock(script->mutex);
 
     if(fl_wloop) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for unlock (scipt-id=%s, sem=%i)\n", script->id, script->sem);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for unlock (scipt-id=%s, sem=%i)\n", script->id, script->sem);
         while(fl_wloop) {
             switch_mutex_lock(script->mutex);
             fl_wloop = (script->sem != 0);
@@ -133,7 +133,6 @@ JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name) {
 
     script = JS_GetRuntimeOpaque(rt);
     switch_assert(script);
-
 
     if(script_sem_take(script)) {
         switch_mutex_lock(script->classes_map_mutex);
@@ -194,5 +193,38 @@ uint8_t *safe_pool_bufdup(switch_memory_pool_t *pool, uint8_t *buffer, switch_si
         memcpy(buffer_local, buffer, len);
     }
     return buffer_local;
+}
+
+char *audio_file_write(switch_byte_t *buf, uint32_t buf_len, uint32_t samplerate, uint32_t channels, const char *file_ext) {
+    switch_status_t status = SWITCH_STATUS_FALSE;
+    switch_size_t len = (buf_len / sizeof(uint16_t));
+    switch_file_handle_t fh = { 0 };
+    char *file_name = NULL;
+    char name_uuid[SWITCH_UUID_FORMATTED_LENGTH + 1] = { 0 };
+    int flags = (SWITCH_FILE_FLAG_WRITE | SWITCH_FILE_DATA_SHORT);
+
+    switch_uuid_str((char *)name_uuid, sizeof(name_uuid));
+    file_name = switch_mprintf("%s%s%s.%s", SWITCH_GLOBAL_dirs.temp_dir, SWITCH_PATH_SEPARATOR, name_uuid, (file_ext == NULL ? "wav" : file_ext) );
+
+    if((status = switch_core_file_open(&fh, file_name, channels, samplerate, flags, NULL)) != SWITCH_STATUS_SUCCESS) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Open failed (%s)\n", file_name);
+        goto out;
+    }
+
+    if((status = switch_core_file_write(&fh, buf, &len)) != SWITCH_STATUS_SUCCESS) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Write failed (%s)\n", file_name);
+        goto out;
+    }
+
+    switch_core_file_close(&fh);
+out:
+    if(status != SWITCH_STATUS_SUCCESS) {
+        if(file_name) {
+            unlink(file_name);
+            switch_safe_free(file_name);
+        }
+        return NULL;
+    }
+    return file_name;
 }
 

@@ -302,11 +302,30 @@ static JSValue js_is_interrupted(JSContext *ctx, JSValueConst this_val, int argc
     if(!script) {
         return JS_FALSE;
     }
-    return (script->fl_interrupt ? JS_TRUE : JS_FALSE);
+    return (globals.fl_shutdown || script->fl_interrupt ? JS_TRUE : JS_FALSE);
 }
 
 static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     return js_session_ext_bridge(ctx, this_val, argc, argv);
+}
+
+static JSValue js_unlink(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
+    const char *path = NULL;
+
+    if(!script) {
+        return JS_ThrowTypeError(ctx, "Invalid ctx");
+    }
+
+    path = JS_ToCString(ctx, argv[0]);
+    if(zstr(path)) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: filename");
+    }
+
+    unlink(path);
+
+    JS_FreeCString(ctx, path);
+    return JS_TRUE;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -428,12 +447,10 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     volatile script_t *_ref = (script_t *) obj;
     script_t *script = (script_t *) _ref;
     switch_status_t status = SWITCH_STATUS_SUCCESS;
-    char *script_buf_local = NULL;
-    char *script_tmp_buff = NULL;
-    uint8_t fl_odbc_enable=0;
+    uint8_t fl_odbc_enable = false;
     JSContext *ctx = NULL;
     JSRuntime *rt = NULL;
-    JSValue global_obj, script_obj, argc_obj, argv_obj, flags_obj;
+    JSValue global_obj, session_obj, script_obj, argc_obj, argv_obj, flags_obj;
     JSValue result;
 
     if(script->fl_destroyed || globals.fl_shutdown) {
@@ -527,28 +544,27 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "system", JS_NewCFunction(ctx, js_system, "system", 1));
     JS_SetPropertyStr(ctx, global_obj, "exit", JS_NewCFunction(ctx, js_exit, "exit", 1));
     JS_SetPropertyStr(ctx, global_obj, "md5", JS_NewCFunction(ctx, js_md5, "md5", 1));
+    JS_SetPropertyStr(ctx, global_obj, "unlink", JS_NewCFunction(ctx, js_unlink, "unlink", 1));
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
 
-    // todo: will do over...
+    // add session obj
     if(script->session) {
-        uint32_t clen = 0;
-        switch_channel_t *channel = switch_core_session_get_channel(script->session);
-        script_tmp_buff = switch_mprintf("var session = new Session('%s');\n", switch_channel_get_uuid(channel));
-
-        clen = (script->script_len + strlen(script_tmp_buff));
-
-        switch_zmalloc(script_buf_local, clen + 1);
-        memcpy(script_buf_local, script_tmp_buff, strlen(script_tmp_buff));
-        memcpy(script_buf_local + strlen(script_tmp_buff), script->script_buf, script->script_len);
-
         script->fl_ready = true;
-        result = JS_Eval(ctx, script_buf_local, clen, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
-    } else {
-        script->fl_ready = true;
-        result = JS_Eval(ctx, script->script_buf, script->script_len, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
+
+        session_obj = js_session_object_create(ctx, script->session);
+        if(JS_IsException(session_obj)) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create a session object\n");
+            goto out;
+        }
+
+        JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
     }
+
+    // eval
+    script->fl_ready = true;
+    result = JS_Eval(ctx, script->script_buf, script->script_len, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
 
     if(JS_IsException(result)) {
         js_ctx_dump_error(script, ctx);
@@ -560,22 +576,16 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 out:
     JS_FreeValue(ctx, global_obj);
 
-    script->fl_ready = false;
     script->fl_destroyed = true;
-
-    switch_safe_free(script_tmp_buff);
-    switch_safe_free(script_buf_local);
-
     script_wait_unlock(script);
 
-    if(ctx) {
-        JS_FreeContext(ctx);
-    }
-    if(rt) {
-        JS_FreeRuntime(rt);
-    }
+    if(ctx) { JS_FreeContext(ctx); }
+    if(rt)  { JS_FreeRuntime(rt); }
+
     script->rt = NULL;
     script->ctx = NULL;
+
+    script->fl_ready = false;
 
     switch_mutex_lock(globals.mutex_scripts_map);
     switch_core_hash_delete(globals.scripts_map, script->id);

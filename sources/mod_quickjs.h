@@ -19,11 +19,13 @@
  #define false SWITCH_FALSE
 #endif
 
-#define JID_NONE 0x0
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#define JID_NONE    0x0
 #define QJS_IS_NULL(jsV)  (JS_IsNull(jsV) || JS_IsUndefined(jsV) || JS_IsUninitialized(jsV))
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#define BASE64_ENC_SZ(n) (4*(n/3))
+#define BASE64_DEC_SZ(n) ((n*3)/4)
 
-#define MOD_VERSION "1.4 (a3)"
+#define MOD_VERSION "1.5 (a3)"
 
 typedef struct {
     switch_mutex_t          *mutex;
@@ -64,6 +66,8 @@ uint8_t *safe_pool_bufdup(switch_memory_pool_t *pool, uint8_t *buffer, switch_si
 
 void launch_thread(switch_memory_pool_t *pool, switch_thread_start_t fun, void *data);
 void thread_finished();
+
+char *audio_file_write(switch_byte_t *buf, uint32_t buf_len, uint32_t samplerate, uint32_t channels, const char *file_ext);
 
 void js_ctx_dump_error(script_t *script, JSContext *ctx);
 switch_status_t js_register_classid(JSRuntime *rt, const char *class_name, JSClassID class_id);
