@@ -11,11 +11,11 @@
  - [Scripts examples](examples/)
 
 ## version 1.5
-This version focused on adding features to make interactive systems faster to develop.
+This version focused on adding features to make interactive systems faster to develop.<br>
 In particular:
- - a simple way to process audio streams, fragment and manipulate ones
-   the session object has got new methods, see docs and examples.
- - Curl also got ability to asynchronous interaction and access to additional settings
-   this allows to setup Curl more flexible for a certain service, see docs and examples
+ - a simple way to process audio streams, fragment and manipulate ones <br>
+   the session object has got new methods, see docs and examples. <br> 
+ - Curl also got ability to asynchronous interaction and access to additional settings <br>
+   this allows to setup Curl more flexible for a certain service, see docs and examples <br>
 
 * new examples and documentations will be appeared soon
