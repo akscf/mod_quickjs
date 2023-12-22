@@ -18,4 +18,13 @@ In particular:
  - Curl also got ability to asynchronous interaction and access to additional settings <br>
    this allows to setup Curl more flexible for a certain service, see docs and examples <br>
 
-* new examples and documentations will be appeared soon
+New examples: <br>
+ - [Stream capturing and working with chunks](https://github.com/akscf/mod_quickjs/blob/main/examples/v15_echo.js)
+ - [Simple transcription through the whispered](https://github.com/akscf/mod_quickjs/blob/main/examples/v15_whisperd.js)
+ - [Interaction with OpenAI (chatGPT+whisper)](https://github.com/akscf/mod_quickjs/blob/main/examples/v15_openai_chat.js)
+ - [Asynchronous requests in the Curl](https://github.com/akscf/mod_quickjs/blob/main/examples/curl_async_test.js)
+ 
+Documentations: <br>
+ will be appeared soon...
+
+
