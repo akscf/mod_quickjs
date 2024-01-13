@@ -13,13 +13,13 @@
 ## version 1.6
 This version focused on adding features to make interactive systems faster to develop.<br>
 In particular: 
- - added the IVS object to makes easy capture audio streams and work with them.
+ - added the IVS object that helps to capture media streams and work with them <br>
    see: v16_echo.js (and other examples with v16_ prefix)
- - new features in the Curl object that allows to work in asynchronous mode
+ - new features in the Curl object that allows to work in asynchronous mode <br>
    see: curl_async_test.js
- - examples: <br>
-    [Stream capturing and working with chunks](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_echo.js)
-    [Simple transcription through the whispered](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_whisperd.js)
-    [Interaction with OpenAI (chatGPT+whisper)](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_chatgpt.js)
-    [Asynchronous requests in the Curl](https://github.com/akscf/mod_quickjs/blob/main/examples/curl_async_test.js)
+ - new examples: <br>
+    - [Stream capturing and working with chunks](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_echo.js)
+    - [Simple transcription through the whispered](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_whisperd.js)
+    - [Interaction with OpenAI (chatGPT+whisper)](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_chatgpt.js)
+    - [Asynchronous requests in the Curl](https://github.com/akscf/mod_quickjs/blob/main/examples/curl_async_test.js)
  
