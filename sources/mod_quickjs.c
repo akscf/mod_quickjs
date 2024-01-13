@@ -16,6 +16,7 @@
 #include "js_eventhandler.h"
 #include "js_session.h"
 #include "js_curl.h"
+#include "js_ivs.h"
 
 globals_t globals;
 
@@ -450,7 +451,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     uint8_t fl_odbc_enable = false;
     JSContext *ctx = NULL;
     JSRuntime *rt = NULL;
-    JSValue global_obj, session_obj, script_obj, argc_obj, argv_obj, flags_obj;
+    JSValue global_obj, session_obj, script_obj, runtime_obj, argc_obj, argv_obj, flags_obj;
     JSValue result;
 
     if(script->fl_destroyed || globals.fl_shutdown) {
@@ -496,6 +497,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_eventhandler_class_register(ctx, global_obj);
     js_xml_class_register(ctx, global_obj);
     js_curl_class_register(ctx, global_obj);
+    js_ivs_class_register(ctx, global_obj);
 
 #ifdef JS_ODBC_ENABLE
     js_odbc_class_register(ctx, global_obj);
@@ -506,6 +508,10 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     flags_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, flags_obj, "odbcEnabled", JS_NewString(ctx, (fl_odbc_enable ? "true" : "false")));
     JS_SetPropertyStr(ctx, global_obj, "flags", flags_obj);
+
+    runtime_obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, runtime_obj, "version", JS_NewString(ctx, MOD_VERSION));
+    JS_SetPropertyStr(ctx, global_obj, "runtime", runtime_obj);
 
     script_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, script_obj, "id",   JS_NewString(ctx, script->id));
@@ -769,7 +775,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     }
 
     globals.fl_shutdown = false;
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "quckjs (%s)\n", MOD_VERSION);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "quckjs (version-%s)\n", MOD_VERSION);
 
 done:
     if(xml) {

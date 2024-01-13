@@ -10,21 +10,16 @@
  - [Builitin classes](http://akscf.org/files/mod_quickjs/builtin_classes_v10.pdf)
  - [Scripts examples](examples/)
 
-## version 1.5
+## version 1.6
 This version focused on adding features to make interactive systems faster to develop.<br>
-In particular:
- - a simple way to process audio streams, fragment and manipulate ones <br>
-   the session object has got new methods, see docs and examples. <br> 
- - Curl also got ability to asynchronous interaction and access to additional settings <br>
-   this allows to setup Curl more flexible for a certain service, see docs and examples <br>
-
-New examples: <br>
- - [Stream capturing and working with chunks](https://github.com/akscf/mod_quickjs/blob/main/examples/v15_echo.js)
- - [Simple transcription through the whispered](https://github.com/akscf/mod_quickjs/blob/main/examples/v15_whisperd.js)
- - [Interaction with OpenAI (chatGPT+whisper)](https://github.com/akscf/mod_quickjs/blob/main/examples/v15_openai_chat.js)
- - [Asynchronous requests in the Curl](https://github.com/akscf/mod_quickjs/blob/main/examples/curl_async_test.js)
+In particular: 
+ - added the IVS object to makes easy capture audio streams and work with them.
+   see: v16_echo.js (and other examples with v16_ prefix)
+ - new features in the Curl object that allows to work in asynchronous mode
+   see: curl_async_test.js
+ - examples: <br>
+    [Stream capturing and working with chunks](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_echo.js)
+    [Simple transcription through the whispered](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_whisperd.js)
+    [Interaction with OpenAI (chatGPT+whisper)](https://github.com/akscf/mod_quickjs/blob/main/examples/v16_chatgpt.js)
+    [Asynchronous requests in the Curl](https://github.com/akscf/mod_quickjs/blob/main/examples/curl_async_test.js)
  
-Documentations: <br>
- will be appeared soon...
-
-

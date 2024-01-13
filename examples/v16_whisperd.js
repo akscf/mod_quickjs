@@ -1,5 +1,5 @@
 //
-// shows interaction with the whisperd (or the OpenAI service)
+// interaction with the whisperd (or the OpenAI service)
 //
 
 if(typeof(session) == 'undefined') {
@@ -21,66 +21,62 @@ wdCurl.authType = 'bearer';
 wdCurl.credentials = 'secret123';
 wdCurl.contentType = 'multipart/form-data';
 
+// ivs
+var ivs = new IVS(session);
+//ivs.silenceTimeout = 5; // sec
+ivs.ttsEngine = "piper";
+ivs.language = "en";
+ivs.cngEnable = true;
+ivs.dtmfMaxDigits = 2;
 
-// setup capture
-var err = session.ivsCaptureStart('audio', 'file', 'mp3');
-if(!err) {
+if(!ivs.captureStart('audio', 'file', 'mp3')) {
     consoleLog('err', "Couldn't start cepture!");
     exit();
 }
-
-// catching DTMF input, too
-session.ivsCng = true;
-session.ivsDtmfMaxDigits = 2;
-
 
 var flSayHello = false;
 var asrFiles = {};
 
 while(!script.isInterrupted()) {
-    if(!session.isReady) { 
-	break; 
-    }
+    if(!session.isReady) { break; }
 
     if(!flSayHello) {
-	session.ivsPlayback('/opt/freeswitch/share/freeswitch/sounds/en/us/callie/conference/8000/conf-welcome.wav', false, true);
+	ivs.say("Hello, How can I help you?");
 	flSayHello = true;
     }
 
     // check responses from the whisperd
     var curlEvent = wdCurl.getAsyncResult();
     if(curlEvent) {
-	// delete chunks temporary files
 	var oid = 'asr' + curlEvent['jid'];
 	if(asrFiles[oid]) { unlink(asrFiles[oid]); delete(asrFiles[oid]); }
 
 	// parse the response
-	if(curlEvent.code == 200) {
-    	    var wobj = JSON.parse(curlEvent.body);
+        if(curlEvent.code == 200) {
+	    var wobj = JSON.parse(curlEvent.body);
     	    if(wobj) {
 		if(wobj['text']) {
 		    consoleLog('notice', "TRANSCRIPTION-RESULT: [" + wobj.text + "]");
 		} else if(wobj['error']) {
 		    consoleLog('err', "TRANSCRIPTION-ERROR: [" + wobj.error.message + "]");
-		}		
-    	    }
+		}
+	    }
 	} else {
-	    consoleLog('err', "HTTP-ERROR: [" + curlEvent.body + "]");
+    	    consoleLog('err', "HTTP-ERROR: [" + curlEvent.body + "]");
 	}
     }
 
     // send chucnks to the whisperd
-    var ivsEvent = session.ivsGetEvent();
+    var ivsEvent = ivs.getEvent();
     if(ivsEvent) {
 	if(ivsEvent.type == 'audio-chunk-ready') {
-	    var jid = wdCurl.performAsync({type: 'simple', name: 'model', value: 'whisper-1'}, {type: 'file', name: 'file', value: ivsEvent.data.file} };
-	    if(jid) { asrFiles['asr' + jid] = ivsEvent.data.file; }
-
+    	    var jid = wdCurl.performAsync({type: 'simple', name: 'model', value: 'whisper-1'}, {type: 'file', name: 'file', value: ivsEvent.data.file} );
+    	    if(jid) { asrFiles['asr' + jid] = ivsEvent.data.file; }
 	} else if(ivsEvent.type == 'dtmf-buffer-ready') {
-	    consoleLog('notice', "DTMF-INPUT: [" + ivsEvent.data.digits + "]");
+    	    consoleLog('notice', "DTMF-INPUT: [" + ivsEvent.data.digits + "]");
 	}
     }
 
-    msleep(10);
+    msleep(100);
 }
 

@@ -1,7 +1,6 @@
 //
-// show interaction with openai api
+// interaction with openai services
 //
-
 if(typeof(session) == 'undefined') {
     consoleLog('error', "session not found!");
     exit();
@@ -14,7 +13,6 @@ if(!session.isReady) {
     exit();
 }
 
-
 var wspCurl = new CURL('https://api.openai.com/v1/audio/transcriptions', 'POST', 30);
 wspCurl.authType = 'bearer';
 wspCurl.credentials = '---YOUR-API-KEY---';
@@ -26,22 +24,20 @@ gptCurl.credentials = '---YOUR-API-KEY---';
 gptCurl.contentType = 'application/json';
 
 
-// setup and start capture
-var err = session.ivsCaptureStart('audio', 'file', 'mp3');
-if(!err) {
+var ivs = new IVS(session);
+//ivs.silenceTimeout = 5; // sec
+ivs.ttsEngine = "piper";
+ivs.language = "en";
+ivs.cngEnable = true;
+ivs.dtmfMaxDigits = 2;
+
+if(!ivs.captureStart('audio', 'file', 'mp3')) {
     consoleLog('err', "Couldn't start cepture!");
     exit();
 }
 
-
 var flSayHello = false;
 var asrFiles = {};
-
-//
-// uncomment line below if you're going use tts and you have mod_google_tts
-//
-//session.setVariable("tts_engine", "google");
-
 
 while(!script.isInterrupted()) {
     if(!session.isReady) { 
@@ -49,7 +45,7 @@ while(!script.isInterrupted()) {
     }
 
     if(!flSayHello) {
-	session.ivsPlayback('/opt/freeswitch/share/freeswitch/sounds/en/us/callie/conference/8000/conf-welcome.wav', false, true);
+	ivs.say("Hello, How can I help you?");
 	flSayHello = true;
     }
 
@@ -87,12 +83,10 @@ while(!script.isInterrupted()) {
 		var tobj = rspObj['choices'][0];
 		if(tobj && tobj['message']) {
     		    var txt = tobj['message']['content'];
-    		    
-		    consoleLog("notice", "GPT-TXT: [" + txt + "]");
-
-		    if(session.getVariable("tts_engine") == "google") {
-			ivs.ivsSay(txt, 'en', true);
-		    }		    
+    		    if(txt) {
+			consoleLog("notice", "GPT-TXT: [" + txt + "]");
+			ivs.ivsSay(txt, true);
+		    }
 		}
 	    }
 	} else {
@@ -101,14 +95,13 @@ while(!script.isInterrupted()) {
     }
 
     // audio chunks
-    var ivsEvent = session.ivsGetEvent();
+    var ivsEvent = ivs.getEvent();
     if(ivsEvent && ivsEvent.type == 'audio-chunk-ready') {
-
 	var jid = wspCurl.performAsync({type: 'simple', name: 'model', value: 'whisper-1'}, {type: 'file', name: 'file', value: ivsEvent.data.file} );
 	if(jid) { asrFiles['asr' + jid] = ivsEvent.data.file; }
 
     }
 
-    msleep(10);
+    msleep(100);
 }
 

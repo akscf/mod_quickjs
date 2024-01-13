@@ -1,7 +1,4 @@
 /**
- * v1.5 (xx.12.2023)
- *  + added:
- *
  * (C)2021 aks
  * https://github.com/akscf/
  **/
@@ -31,20 +28,9 @@
 #define PROP_IS_READY                       14
 #define PROP_IS_ANSWERED                    15
 #define PROP_IS_MEDIA_READY                 16
-#define PROP_IVS_IS_AUDIO_CAPTURE_ACTIVE    20
-#define PROP_IVS_IS_VIDEO_CAPTURE_ACTIVE    21
-#define PROP_IVS_CHUNK_SEC                  22
-#define PROP_IVS_CHUNK_TYPE                 23
-#define PROP_IVS_CHUNK_ENC                  24
-#define PROP_IVS_VAD_VOICE_MS               25
-#define PROP_IVS_VAD_SILENCE_MS             26
-#define PROP_IVS_VAD_THRESHOLD              27
-#define PROP_IVS_VAD_DEBUG                  28
-#define PROP_IVS_VAD_STATE                  29
-#define PROP_IVS_CNG_ON                     30
-#define PROP_IVS_CNG_LVL                    31
-#define PROP_IVS_DTMF_MAX_DIGITS            32
-#define PROP_IVS_DTMF_MAX_IDLE              33
+#define PROP_ENCODED_FRAME_SIZE             17
+#define PROP_DECODED_FRAME_SIZE             18
+
 
 #define SESSION_SANITY_CHECK() if (!jss || !jss->session) { \
            return JS_ThrowTypeError(ctx, "Session is not initialized"); \
@@ -165,47 +151,11 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
         case PROP_IS_MEDIA_READY: {
             return (switch_channel_media_ready(switch_core_session_get_channel(jss->session)) ? JS_TRUE : JS_FALSE);
         }
-        case PROP_IVS_IS_AUDIO_CAPTURE_ACTIVE: {
-            return jss->fl_audio_cap_cative ? JS_TRUE : JS_FALSE;
+        case PROP_ENCODED_FRAME_SIZE: {
+            return JS_NewInt32(ctx, jss->encoded_frame_size);
         }
-        case PROP_IVS_IS_VIDEO_CAPTURE_ACTIVE: {
-            return jss->fl_video_cap_cative ? JS_TRUE : JS_FALSE;
-        }
-        case PROP_IVS_CNG_ON: {
-            return (js_session_xflags_test(jss, IVS_XFLAG_AUDIO_CAP_CNG_ON) ? JS_TRUE : JS_FALSE);
-        }
-        case PROP_IVS_CNG_LVL: {
-            return JS_NewInt32(ctx, jss->ivs_cng_lvl);
-        }
-        case PROP_IVS_CHUNK_SEC: {
-            return JS_NewInt32(ctx, jss->ivs_audio_chunk_sec);
-        }
-        case PROP_IVS_CHUNK_TYPE: {
-            return JS_NewString(ctx, ivs_chunkType2name(jss->ivs_audio_chunk_type));
-        }
-        case PROP_IVS_CHUNK_ENC: {
-            return JS_NewString(ctx, ivs_chunkEncoding2name(jss->ivs_audio_chunk_encoding));
-        }
-        case PROP_IVS_VAD_VOICE_MS: {
-            return JS_NewInt32(ctx, jss->ivs_vad_voice_ms);
-        }
-        case PROP_IVS_VAD_SILENCE_MS: {
-            return JS_NewInt32(ctx, jss->ivs_vad_silence_ms);
-        }
-        case PROP_IVS_VAD_THRESHOLD: {
-            return JS_NewInt32(ctx, jss->ivs_vad_threshold);
-        }
-        case PROP_IVS_VAD_DEBUG: {
-            return (jss->ivs_vad_debug ? JS_TRUE : JS_FALSE);
-        }
-        case PROP_IVS_VAD_STATE: {
-            return JS_NewString(ctx, ivs_vadState2name(jss->ivs_vad_state));
-        }
-        case PROP_IVS_DTMF_MAX_DIGITS: {
-            return JS_NewInt32(ctx, jss->ivs_dtmf_max_digits);
-        }
-        case PROP_IVS_DTMF_MAX_IDLE: {
-            return JS_NewInt32(ctx, jss->ivs_dtmf_idle_sec);
+        case PROP_DECODED_FRAME_SIZE: {
+            return JS_NewInt32(ctx, jss->decoded_frame_size);
         }
     }
     return JS_UNDEFINED;
@@ -217,67 +167,6 @@ static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JS
 
     SESSION_SANITY_CHECK();
 
-    switch(magic) {
-        case PROP_IVS_CNG_ON: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            js_session_xflags_set(jss, IVS_XFLAG_AUDIO_CAP_CNG_ON, JS_ToBool(ctx, val));
-            return JS_TRUE;
-        }
-        case PROP_IVS_CNG_LVL: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            JS_ToUint32(ctx, &jss->ivs_cng_lvl, val);
-            return JS_TRUE;
-        }
-        case PROP_IVS_CHUNK_SEC: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            JS_ToUint32(ctx, &jss->ivs_audio_chunk_sec, val);
-            return JS_TRUE;
-        }
-        case PROP_IVS_CHUNK_TYPE: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            str = JS_ToCString(ctx, val);
-            jss->ivs_audio_chunk_encoding = ivs_chunkType2id(str);
-            JS_FreeCString(ctx, str);
-            return JS_TRUE;
-        }
-        case PROP_IVS_CHUNK_ENC: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            str = JS_ToCString(ctx, val);
-            jss->ivs_audio_chunk_type = ivs_chunkEncoding2id(str);
-            JS_FreeCString(ctx, str);
-            return JS_TRUE;
-        }
-        case PROP_IVS_VAD_VOICE_MS: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            JS_ToUint32(ctx, &jss->ivs_vad_voice_ms, val);
-            return JS_TRUE;
-        }
-        case PROP_IVS_VAD_SILENCE_MS: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            JS_ToUint32(ctx, &jss->ivs_vad_silence_ms, val);
-            return JS_TRUE;
-        }
-        case PROP_IVS_VAD_THRESHOLD: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            JS_ToUint32(ctx, &jss->ivs_vad_threshold, val);
-            return JS_TRUE;
-        }
-        case PROP_IVS_VAD_DEBUG: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            jss->ivs_vad_debug = JS_ToBool(ctx, val);
-            return JS_TRUE;
-        }
-        case PROP_IVS_DTMF_MAX_DIGITS: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            JS_ToUint32(ctx, &jss->ivs_dtmf_max_digits, val);
-            return JS_TRUE;
-        }
-        case PROP_IVS_DTMF_MAX_IDLE: {
-            if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            JS_ToUint32(ctx, &jss->ivs_dtmf_idle_sec, val);
-            return JS_TRUE;
-        }
-    }
     return JS_FALSE;
 }
 
@@ -348,7 +237,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
     if(QJS_IS_NULL(argv[1])) {
         ch_tts_voice = switch_channel_get_variable(channel, "tts_voice");
         if(zstr(ch_tts_name)) {
-            return JS_ThrowTypeError(ctx, "Invalid argument: ttlVoice");
+            return JS_ThrowTypeError(ctx, "Invalid argument: ttsVoice");
         }
     }
     if(QJS_IS_NULL(argv[2])) {
@@ -1137,252 +1026,6 @@ static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int
     return JS_NewInt64(ctx, len);
 }
 
-
-// v1.5
-/* ((audio|video), [[file|buffer], [wav|mp3|...])] */
-static JSValue js_session_ivs_capture_start(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-    JSValue ret_val = JS_FALSE;
-    const char *what = NULL;
-    const char *chunk_type = NULL;
-    const char *chunk_enc = NULL;
-
-    SESSION_SANITY_CHECK();
-
-    if(argc < 1)  {
-        return JS_ThrowTypeError(ctx, "Not enough arguments");
-    }
-    if(QJS_IS_NULL(argv[0])) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: what");
-    }
-
-    what = JS_ToCString(ctx, argv[0]);
-
-    if(argc > 1) {
-        if(!QJS_IS_NULL(argv[1])) {
-            chunk_type = JS_ToCString(ctx, argv[1]);
-        }
-    }
-    if(argc > 2) {
-        if(!QJS_IS_NULL(argv[2])) {
-            chunk_enc = JS_ToCString(ctx, argv[2]);
-        }
-    }
-
-    if(strcasecmp(what, "audio") == 0) {
-        if(chunk_type) {
-            jss->ivs_audio_chunk_type = ivs_chunkType2id(chunk_type);
-        }
-        if(chunk_enc) {
-            jss->ivs_audio_chunk_encoding = ivs_chunkEncoding2id(chunk_enc);
-        }
-        if(ivs_audio_start_capture(jss) == SWITCH_STATUS_SUCCESS) {
-            ret_val = JS_TRUE;
-        }
-        goto out;
-    }
-
-    if(strcasecmp(what, "video") == 0) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "not yet implemented (%s)\n", what);
-    }
-out:
-    JS_FreeCString(ctx, what);
-    JS_FreeCString(ctx, chunk_type);
-    JS_FreeCString(ctx, chunk_enc);
-    return ret_val;
-}
-
-/* (audio|video) */
-static JSValue js_session_ivs_capture_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-    const char *what = NULL;
-    JSValue ret_val = JS_FALSE;
-
-    SESSION_SANITY_CHECK();
-
-    if(argc > 0 && !QJS_IS_NULL(argv[0])) {
-        what = JS_ToCString(ctx, argv[0]);
-    }
-
-    if(what == NULL || strcasecmp(what, "*") == 0 || strcasecmp(what, "audio") == 0) {
-        js_session_xflags_set(jss, IVS_XFLAG_AUDIO_CAP_STOP, true);
-    }
-
-    if(what == NULL || strcasecmp(what, "*") == 0 || strcasecmp(what, "video") == 0) {
-        js_session_xflags_set(jss, IVS_XFLAG_VIDEO_CAP_STOP, true);
-    }
-
-    JS_FreeCString(ctx, what);
-    return ret_val;
-}
-
-static JSValue js_session_ivs_playback_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-
-    SESSION_SANITY_CHECK();
-
-    ivs_playback_stop(jss);
-
-    return JS_TRUE;
-}
-
-// playback("fileToPlay", [delete after paly: true/false], [async: true/false])
-static JSValue js_session_ivs_playback(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-    const char *path = NULL;
-    int fl_async = false, fl_delete = false;
-    JSValue ret_val = JS_UNDEFINED;
-
-    SESSION_SANITY_CHECK();
-
-    if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Invalid arguments");
-    }
-
-    path = JS_ToCString(ctx, argv[0]);
-    if(zstr(path)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: filename");
-    }
-    if(argc > 1) {
-        fl_delete = JS_ToBool(ctx, argv[1]);
-    }
-    if(argc > 2) {
-        fl_async = JS_ToBool(ctx, argv[2]);
-    }
-
-    if(fl_async) {
-        uint32_t jid = ivs_async_playback(jss, path, fl_delete);
-        ret_val = (jid > 0 ? JS_NewInt32(ctx, jid) : JS_FALSE);
-    } else {
-        switch_status_t st = ivs_playback(jss, (char *)path, false);
-        if(fl_delete) { unlink(path); }
-        ret_val = (st == SWITCH_STATUS_SUCCESS ? JS_TRUE : JS_FALSE);
-    }
-
-    JS_FreeCString(ctx, path);
-    return ret_val;
-}
-
-// say("textToSpeech", "language", [async: true/false])
-static JSValue js_session_ivs_say(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-    const char *text = NULL;
-    const char *lang = NULL;
-    int fl_async = false;
-    JSValue ret_val = JS_UNDEFINED;
-
-    SESSION_SANITY_CHECK();
-
-    if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "Not enough arguments");
-    }
-
-    text = JS_ToCString(ctx, argv[0]);
-    if(zstr(text)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: text");
-    }
-
-    lang = JS_ToCString(ctx, argv[1]);
-    if(zstr(lang)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: lang");
-    }
-
-    if(argc > 2) {
-        fl_async = JS_ToBool(ctx, argv[2]);
-    }
-
-    if(fl_async) {
-        uint32_t jid = ivs_async_say(jss, (char *)lang, text);
-        ret_val = (jid > 0 ? JS_NewInt32(ctx, jid) : JS_FALSE);
-    } else {
-        switch_status_t st = ivs_say(jss, (char *)lang, (char *)text, false);
-        ret_val = (st == SWITCH_STATUS_SUCCESS ? JS_TRUE : JS_FALSE);
-    }
-
-    JS_FreeCString(ctx, text);
-    JS_FreeCString(ctx, lang);
-    return ret_val;
-}
-
-static JSValue js_session_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-    JSValue ret_val = JS_FALSE;
-    JSValue edata_obj = JS_FALSE;
-    uint8_t fl_found = false;
-    void *pop = NULL;
-
-    SESSION_SANITY_CHECK();
-
-    if(switch_queue_trypop(jss->ivs_events, &pop) == SWITCH_STATUS_SUCCESS) {
-        ivs_event_t *event = (ivs_event_t *)pop;
-        if(event) {
-            fl_found = true;
-            ret_val = JS_NewObject(ctx);
-
-            JS_SetPropertyStr(ctx, ret_val, "class",   JS_NewString(ctx, "IvsEvent"));
-            JS_SetPropertyStr(ctx, ret_val, "jid",     JS_NewInt32(ctx, event->jid));
-
-            switch(event->type) {
-                case IVS_EVENT_NONE: {
-                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "nop"));
-                    break;
-                }
-                case IVS_EVENT_SPEAKING_START: {
-                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "speaking-start"));
-                    break;
-                }
-                case IVS_EVENT_SPEAKING_STOP: {
-                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "speaking-stop"));
-                    break;
-                }
-                case IVS_EVENT_PLAYBACK_START: {
-                    edata_obj = JS_NewObject(ctx);
-                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "playback-start"));
-                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
-                    JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, event->payload, event->payload_len));
-                    break;
-                }
-                case IVS_EVENT_PLAYBACK_STOP: {
-                    edata_obj = JS_NewObject(ctx);
-                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "playback-stop"));
-                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
-                    JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, event->payload, event->payload_len));
-                    break;
-                }
-                case IVS_EVENT_DTMF_BUFFER_READY: {
-                    edata_obj = JS_NewObject(ctx);
-                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "dtmf-buffer-ready"));
-                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
-                    JS_SetPropertyStr(ctx, edata_obj, "digits", JS_NewStringLen(ctx, event->payload, event->payload_len));
-                    break;
-                }
-                case IVS_EVENT_AUDIO_CHUNK_READY: {
-                    ivs_event_payload_audio_chunk_t *payload = (ivs_event_payload_audio_chunk_t *)event->payload;
-                    edata_obj = JS_NewObject(ctx);
-                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "audio-chunk-ready"));
-                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
-
-                    if(payload) {
-                        JS_SetPropertyStr(ctx, edata_obj, "type", JS_NewString(ctx, ivs_chunkType2name(jss->ivs_audio_chunk_type)));
-                        JS_SetPropertyStr(ctx, edata_obj, "time", JS_NewInt32(ctx, payload->time));
-                        JS_SetPropertyStr(ctx, edata_obj, "length", JS_NewInt32(ctx, payload->length));
-                        JS_SetPropertyStr(ctx, edata_obj, "samplerate", JS_NewInt32(ctx, payload->samplerate));
-                        JS_SetPropertyStr(ctx, edata_obj, "channels", JS_NewInt32(ctx, payload->channels));
-                        if(jss->ivs_audio_chunk_type == IVS_CHUNK_TYPE_FILE) {
-                            JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, payload->data, payload->data_len));
-                        } else if(jss->ivs_audio_chunk_type == IVS_CHUNK_TYPE_BUFFER) {
-                            JS_SetPropertyStr(ctx, edata_obj, "buffer", JS_NewArrayBufferCopy(ctx, payload->data, payload->data_len));
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    return ret_val;
-}
-
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // handlers
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1535,6 +1178,9 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("isReady", js_session_property_get, js_session_property_set, PROP_IS_READY),
     JS_CGETSET_MAGIC_DEF("isAnswered", js_session_property_get, js_session_property_set, PROP_IS_ANSWERED),
     JS_CGETSET_MAGIC_DEF("isMediaReady", js_session_property_get, js_session_property_set, PROP_IS_MEDIA_READY),
+    JS_CGETSET_MAGIC_DEF("encodedFrameSize", js_session_property_get, js_session_property_set, PROP_ENCODED_FRAME_SIZE),
+    JS_CGETSET_MAGIC_DEF("decodedFrameSize", js_session_property_get, js_session_property_set, PROP_DECODED_FRAME_SIZE),
+    //
     JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),
     JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),
     JS_CFUNC_DEF("speak", 1, js_session_speak),
@@ -1561,26 +1207,6 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("getWriteCodec", 0, js_session_get_write_codec),
     JS_CFUNC_DEF("frameRead", 1, js_session_frame_read),
     JS_CFUNC_DEF("frameWrite", 1, js_session_frame_write),
-    // v1.5 ---------
-    JS_CGETSET_MAGIC_DEF("isAudioCaptureActive", js_session_property_get, js_session_property_set, PROP_IVS_IS_AUDIO_CAPTURE_ACTIVE),
-    JS_CGETSET_MAGIC_DEF("isVideoCaptureActive", js_session_property_get, js_session_property_set, PROP_IVS_IS_VIDEO_CAPTURE_ACTIVE),
-    JS_CGETSET_MAGIC_DEF("ivsAudioChunkSec", js_session_property_get, js_session_property_set, PROP_IVS_CHUNK_SEC),
-    JS_CGETSET_MAGIC_DEF("ivsAudioChunkType", js_session_property_get, js_session_property_set, PROP_IVS_CHUNK_TYPE),
-    JS_CGETSET_MAGIC_DEF("ivsAudioChunkEncoding", js_session_property_get, js_session_property_set, PROP_IVS_CHUNK_ENC),
-    JS_CGETSET_MAGIC_DEF("ivsVadVoiceMs", js_session_property_get, js_session_property_set, PROP_IVS_VAD_VOICE_MS),
-    JS_CGETSET_MAGIC_DEF("ivsVadSilenceMs", js_session_property_get, js_session_property_set, PROP_IVS_VAD_SILENCE_MS),
-    JS_CGETSET_MAGIC_DEF("ivsVadThreshold", js_session_property_get, js_session_property_set, PROP_IVS_VAD_THRESHOLD),
-    JS_CGETSET_MAGIC_DEF("ivsVadDebug", js_session_property_get, js_session_property_set, PROP_IVS_VAD_DEBUG),
-    JS_CGETSET_MAGIC_DEF("ivsCng", js_session_property_get, js_session_property_set, PROP_IVS_CNG_ON),
-    JS_CGETSET_MAGIC_DEF("ivsCngLevel", js_session_property_get, js_session_property_set, PROP_IVS_CNG_LVL),
-    JS_CGETSET_MAGIC_DEF("ivsDtmfMaxDigits", js_session_property_get, js_session_property_set, PROP_IVS_DTMF_MAX_DIGITS),
-    JS_CGETSET_MAGIC_DEF("ivsDtmMaxIdle", js_session_property_get, js_session_property_set, PROP_IVS_DTMF_MAX_IDLE),
-    JS_CFUNC_DEF("ivsCaptureStart", 1, js_session_ivs_capture_start),
-    JS_CFUNC_DEF("ivsCaptureStop", 1, js_session_ivs_capture_stop),
-    JS_CFUNC_DEF("ivsPlayback", 1, js_session_ivs_playback),
-    JS_CFUNC_DEF("ivsPlaybackStop", 1, js_session_ivs_playback_stop),
-    JS_CFUNC_DEF("ivsSay", 1, js_session_ivs_say),
-    JS_CFUNC_DEF("ivsGetEvent", 1, js_session_ivs_get_event),
 };
 
 static void js_session_finalizer(JSRuntime *rt, JSValue val) {
@@ -1593,25 +1219,20 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
     }
 
     jss->fl_ready = false;
-    js_session_xflags_set(jss, IVS_XFLAG_AUDIO_CAP_STOP, true);
-    js_session_xflags_set(jss, IVS_XFLAG_VIDEO_CAP_STOP, true);
 
-    switch_mutex_lock(jss->ivs_mutex);
-    fl_wloop = (jss->ivs_wlock > 0);
-    switch_mutex_unlock(jss->ivs_mutex);
+    switch_mutex_lock(jss->mutex);
+    fl_wloop = (jss->wlock > 0);
+    switch_mutex_unlock(jss->mutex);
 
-    if(jss->ivs_wlock > 0) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for termination '%d' jobs...\n", jss->ivs_wlock);
+    if(jss->wlock > 0) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for unlock ('%d' locks) ...\n", jss->wlock);
         while(fl_wloop) {
-            switch_mutex_lock(jss->ivs_mutex);
-            fl_wloop = (jss->ivs_wlock > 0);
-            switch_mutex_unlock(jss->ivs_mutex);
+            switch_mutex_lock(jss->mutex);
+            fl_wloop = (jss->wlock > 0);
+            switch_mutex_unlock(jss->mutex);
             switch_yield(100000);
         }
     }
-
-    ivs_events_queue_term(jss);
-    ivs_audio_queue_term(jss);
 
     if(jss->session) {
         switch_channel_t *channel = switch_core_session_get_channel(jss->session);
@@ -1686,11 +1307,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     if(JS_IsException(obj)) { goto fail; }
 
     //
-    switch_mutex_init(&jss->ivs_mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(jss->session));
-    switch_queue_create(&jss->ivs_events, IVS_EVENTS_QUEUE_SIZE, switch_core_session_get_pool(jss->session));
-    switch_queue_create(&jss->ivs_audioq, IVS_EVENTS_QUEUE_SIZE, switch_core_session_get_pool(jss->session));
-    switch_queue_create(&jss->ivs_dtmfq, IVS_DTMF_QUEUE_SIZE, switch_core_session_get_pool(jss->session));
-
+    switch_mutex_init(&jss->mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(jss->session));
     switch_core_session_get_read_impl(jss->session, &read_impl);
 
     jss->ctx = ctx;
@@ -1698,19 +1315,10 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     jss->ptime = (read_impl.microseconds_per_packet / 1000);
     jss->channels = read_impl.number_of_channels;
     jss->samplerate = read_impl.samples_per_second;
-    jss->encoded_packet_size = read_impl.encoded_bytes_per_packet;
-    jss->decoded_packet_size = read_impl.decoded_bytes_per_packet;
-    //
+    jss->encoded_frame_size = read_impl.encoded_bytes_per_packet;
+    jss->decoded_frame_size = read_impl.decoded_bytes_per_packet;
+
     jss->fl_ready = true;
-    jss->ivs_cng_lvl = 500;
-    jss->ivs_dtmf_idle_sec = 1;
-    jss->ivs_dtmf_max_digits = 1;
-    jss->ivs_vad_voice_ms = 200;
-    jss->ivs_vad_silence_ms = 350;
-    jss->ivs_vad_threshold = 200;
-    jss->ivs_audio_chunk_sec = 15;
-    jss->ivs_audio_chunk_type = IVS_CHUNK_TYPE_BUFFER;
-    jss->ivs_audio_chunk_encoding = IVS_CHUNK_ENCODING_RAW;
 
     JS_SetOpaque(obj, jss);
 
@@ -1778,11 +1386,7 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
     if(JS_IsException(obj)) { return obj; }
 
     //
-    switch_mutex_init(&jss->ivs_mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(session));
-    switch_queue_create(&jss->ivs_events, IVS_EVENTS_QUEUE_SIZE, switch_core_session_get_pool(session));
-    switch_queue_create(&jss->ivs_audioq, IVS_EVENTS_QUEUE_SIZE, switch_core_session_get_pool(session));
-    switch_queue_create(&jss->ivs_dtmfq, IVS_DTMF_QUEUE_SIZE, switch_core_session_get_pool(session));
-
+    switch_mutex_init(&jss->mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(session));
     switch_core_session_get_read_impl(session, &read_impl);
 
     jss->ctx = ctx;
@@ -1791,21 +1395,12 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
     jss->ptime = (read_impl.microseconds_per_packet / 1000);
     jss->channels = read_impl.number_of_channels;
     jss->samplerate = read_impl.samples_per_second;
-    jss->encoded_packet_size = read_impl.encoded_bytes_per_packet;
-    jss->decoded_packet_size = read_impl.decoded_bytes_per_packet;
-    //
+    jss->encoded_frame_size = read_impl.encoded_bytes_per_packet;
+    jss->decoded_frame_size = read_impl.decoded_bytes_per_packet;
+
     jss->fl_ready = true;
     jss->fl_hup_auto = true;
     jss->fl_no_unlock = true;
-    jss->ivs_cng_lvl = 500;
-    jss->ivs_dtmf_idle_sec = 1;
-    jss->ivs_dtmf_max_digits = 1;
-    jss->ivs_vad_voice_ms = 200;
-    jss->ivs_vad_silence_ms = 350;
-    jss->ivs_vad_threshold = 200;
-    jss->ivs_audio_chunk_sec = 15;
-    jss->ivs_audio_chunk_type = IVS_CHUNK_TYPE_BUFFER;
-    jss->ivs_audio_chunk_encoding = IVS_CHUNK_ENCODING_RAW;
 
     JS_SetOpaque(obj, jss);
 

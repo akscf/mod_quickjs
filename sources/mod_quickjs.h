@@ -19,13 +19,12 @@
  #define false SWITCH_FALSE
 #endif
 
-#define JID_NONE    0x0
 #define QJS_IS_NULL(jsV)  (JS_IsNull(jsV) || JS_IsUndefined(jsV) || JS_IsUninitialized(jsV))
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define BASE64_ENC_SZ(n) (4*(n/3))
 #define BASE64_DEC_SZ(n) ((n*3)/4)
-
-#define MOD_VERSION "1.5 (a3)"
+#define JID_NONE    0x0
+#define MOD_VERSION "1.6 (a1)"
 
 typedef struct {
     switch_mutex_t          *mutex;
