@@ -81,18 +81,30 @@ static switch_status_t sys_session_hangup_hook(switch_core_session_t *session);
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-    switch_channel_t *channel = NULL;
     switch_caller_profile_t *caller_profile = NULL;
+    switch_channel_t *channel = NULL;
 
-    if(magic == PROP_IS_READY) {
-        uint8_t x = (jss && jss->session && switch_channel_ready(switch_core_session_get_channel(jss->session)));
-        return(x ? JS_TRUE : JS_FALSE);
+     /* when originate failed */
+    if(jss && jss->session == NULL) {
+        switch(magic) {
+            case PROP_IS_READY:
+            case PROP_IS_ANSWERED:
+            case PROP_IS_MEDIA_READY:
+                return JS_FALSE;
+            case PROP_CAUSE: {
+                if(jss) { return JS_NewString(ctx, switch_channel_cause2str(jss->originate_fail_code) ); }
+                return JS_UNDEFINED;
+            }
+            case PROP_CAUSECODE: {
+                if(jss) { return JS_NewInt32(ctx, jss->originate_fail_code); }
+                return JS_UNDEFINED;
+            }
+            default:
+                return JS_UNDEFINED;
+        }
     }
 
     SESSION_SANITY_CHECK();
-
-    channel = switch_core_session_get_channel(jss->session);
-    caller_profile = switch_channel_get_caller_profile(channel);
 
     switch(magic) {
         case PROP_NAME: {
@@ -144,6 +156,9 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
             const char *name = switch_channel_get_variable(channel, "write_codec");
             if(!zstr(name)) { return JS_NewString(ctx, name); }
             return JS_UNDEFINED;
+        }
+        case PROP_IS_READY: {
+            return (switch_channel_ready(switch_core_session_get_channel(jss->session)) ? JS_TRUE : JS_FALSE);
         }
         case PROP_IS_ANSWERED: {
             return (switch_channel_test_flag(switch_core_session_get_channel(jss->session), CF_ANSWERED) ? JS_TRUE : JS_FALSE);
@@ -1220,17 +1235,19 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
 
     jss->fl_ready = false;
 
-    switch_mutex_lock(jss->mutex);
-    fl_wloop = (jss->wlock > 0);
-    switch_mutex_unlock(jss->mutex);
+    if(jss->mutex) {
+        switch_mutex_lock(jss->mutex);
+        fl_wloop = (jss->wlock > 0);
+        switch_mutex_unlock(jss->mutex);
 
-    if(jss->wlock > 0) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for unlock ('%d' locks) ...\n", jss->wlock);
-        while(fl_wloop) {
-            switch_mutex_lock(jss->mutex);
-            fl_wloop = (jss->wlock > 0);
-            switch_mutex_unlock(jss->mutex);
-            switch_yield(100000);
+        if(jss->wlock > 0) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for unlock ('%d' locks) ...\n", jss->wlock);
+            while(fl_wloop) {
+                switch_mutex_lock(jss->mutex);
+                fl_wloop = (jss->wlock > 0);
+                switch_mutex_unlock(jss->mutex);
+                switch_yield(100000);
+            }
         }
     }
 
@@ -1254,7 +1271,7 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
     js_free_rt(rt, jss);
 }
 
-/* by uuid */
+/* new (uuid | originateString, [oldSession, originateTimeout]) */
 static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
     JSValue obj = JS_UNDEFINED;
     JSValue proto, error;
@@ -1263,7 +1280,12 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     switch_call_cause_t h_cause;
     switch_codec_implementation_t read_impl = { 0 };
     uint8_t has_error = 0;
-    const char *uuid;
+    uint32_t tosec = 0;
+    const char *data;
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
 
     jss = js_mallocz(ctx, sizeof(js_session_t));
     if(!jss) {
@@ -1271,32 +1293,51 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
         return JS_EXCEPTION;
     }
 
-    if(argc > 0) {
-        uuid = JS_ToCString(ctx, argv[0]);
-        if(!strchr(uuid, '/')) {
-            jss->session = switch_core_session_locate(uuid);
+    data = JS_ToCString(ctx, argv[0]);
+    if(!strchr(data, '/')) {
+        jss->session = switch_core_session_locate(data);
+        jss->fl_hup_auto = true;
+
+        if(!jss->session) {
+            error = JS_ThrowTypeError(ctx, "Couldn't create a new session (not found)");
+            has_error = true; goto fail;
+        }
+    } else {
+        if(argc > 1 && JS_IsObject(argv[1])) {
+            jss_old = JS_GetOpaque2(ctx, argv[1], js_seesion_get_classid(ctx));
+        }
+        if(argc > 2)  {
+            JS_ToInt32(ctx, &tosec, argv[2]);
+        }
+        if(tosec == 0) {
+            tosec = 60;
+        }
+
+        if(switch_ivr_originate((jss_old ? jss_old->session : NULL), &jss->session, &h_cause, data, tosec, NULL, NULL, NULL, NULL, NULL, SOF_NONE, NULL, NULL) == SWITCH_STATUS_SUCCESS) {
             jss->fl_hup_auto = true;
+            switch_channel_set_state(switch_core_session_get_channel(jss->session), CS_SOFT_EXECUTE);
+            switch_channel_wait_for_state_timeout(switch_core_session_get_channel(jss->session), CS_SOFT_EXECUTE, 5000);
         } else {
-             if(argc > 1) {
-                if(JS_IsObject(argv[1])) {
-                    jss_old = JS_GetOpaque2(ctx, argv[1], js_seesion_get_classid(ctx));
-                }
-                if(switch_ivr_originate((jss_old ? jss_old->session : NULL), &jss->session, &h_cause, uuid, 60, NULL, NULL, NULL, NULL, NULL, SOF_NONE, NULL, NULL) == SWITCH_STATUS_SUCCESS) {
-                    jss->fl_hup_auto = true;
-                    switch_channel_set_state(switch_core_session_get_channel(jss->session), CS_SOFT_EXECUTE);
-                    switch_channel_wait_for_state_timeout(switch_core_session_get_channel(jss->session), CS_SOFT_EXECUTE, 5000);
-                } else {
-                    has_error = true;
-                    error = JS_ThrowTypeError(ctx, "Couldn't create a new session (%s)", switch_channel_cause2str(h_cause));
-                    goto fail;
-                }
-            }
-            JS_FreeCString(ctx, uuid);
+            //error = JS_ThrowTypeError(ctx, "Originate failed: %s", switch_channel_cause2str(h_cause));
+            //has_error = true; goto fail;
+
+            jss->originate_fail_code = h_cause;
+            jss->fl_originate_fail_result = true;
+
+            proto = JS_GetPropertyStr(ctx, new_target, "prototype");
+            if(JS_IsException(proto)) { goto fail; }
+
+            obj = JS_NewObjectProtoClass(ctx, proto, js_seesion_get_classid(ctx));
+            JS_FreeValue(ctx, proto);
+            if(JS_IsException(obj)) { goto fail; }
+
+            goto out;
         }
     }
+
     if(!jss->session) {
-        error = JS_ThrowTypeError(ctx, "Couldn't create a new session (session no fond)");
-        goto fail;
+        error = JS_ThrowTypeError(ctx, "Couldn't create a new session");
+        has_error = true; goto fail;
     }
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
@@ -1306,7 +1347,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
-    //
+
     switch_mutex_init(&jss->mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(jss->session));
     switch_core_session_get_read_impl(jss->session, &read_impl);
 
@@ -1320,16 +1361,22 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
 
     jss->fl_ready = true;
 
+out:
     JS_SetOpaque(obj, jss);
+    JS_FreeCString(ctx, data);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-constructor: jss=%p, session=%p\n", jss, jss->session);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-constructor: jss=%p, session=%p, originate_fail_code=%i\n", jss, jss->session, jss->originate_fail_code);
 
     return obj;
+
 fail:
+    JS_FreeCString(ctx, data);
+
     if(jss) {
         js_free(ctx, jss);
     }
     JS_FreeValue(ctx, obj);
+
     return (has_error ? error : JS_EXCEPTION);
 }
 

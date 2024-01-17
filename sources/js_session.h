@@ -13,6 +13,8 @@ typedef struct {
     JSContext               *ctx;
     switch_mutex_t          *mutex;
     JSValue                 on_hangup;
+    switch_call_cause_t     originate_fail_code;
+    uint8_t                 fl_originate_fail_result;
     uint8_t                 fl_hup_auto;
     uint8_t                 fl_hup_hook;
     uint8_t                 fl_no_unlock;
