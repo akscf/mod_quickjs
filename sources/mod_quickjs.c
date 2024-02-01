@@ -367,7 +367,7 @@ out:
     return status;
 }
 
-static switch_status_t script_launch(switch_core_session_t *session, char *script_name, char *script_args, uint8_t async) {
+static switch_status_t script_launch(switch_core_session_t *session, char *script_name, char *script_args, char *script_id, uint8_t async) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     char *script_path_local = NULL;
     char *script_args_local = NULL;
@@ -404,7 +404,11 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         goto out;
     }
 
-    new_uuid(&script->id, pool);
+    if(script_id) {
+        script->id = switch_core_strdup(pool, script_id);
+    } else {
+        new_uuid(&script->id, pool);
+    }
 
     script->pool = pool;
     script->path = switch_core_strdup(pool, script_path_local);
@@ -654,12 +658,17 @@ SWITCH_STANDARD_API(quickjs_cmd) {
     }
     if(strcasecmp(argv[0], "run") == 0) {
         char *script_args = (argc > 2 ? ((char *)cmd + (strlen(argv[0]) + strlen(argv[1]) + 2)) : NULL);
+        char *script_id = NULL;
 
-        if((status = script_launch(session, argv[1], script_args, true)) == SWITCH_STATUS_SUCCESS) {
-            stream->write_function(stream, "+OK\n");
+        new_uuid(&script_id, NULL);
+
+        if((status = script_launch(session, argv[1], script_args, script_id, true)) == SWITCH_STATUS_SUCCESS) {
+            stream->write_function(stream, "+OK: %s\n", script_id);
         } else {
             stream->write_function(stream, "-ERR: %i\n", status);
         }
+
+        switch_safe_free(script_id);
         goto out;
     }
     if(strcasecmp(argv[0], "int") == 0) {
@@ -704,7 +713,7 @@ SWITCH_STANDARD_APP(quickjs_app) {
     script_name = argv[0];
     script_args = (argc > 1 ? ((char *)data + (strlen(argv[0]) + 1)) : NULL);
 
-    if((status = script_launch(session, script_name, script_args, false)) != SWITCH_STATUS_SUCCESS) {
+    if((status = script_launch(session, script_name, script_args, NULL, false)) != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't launch: %s\n", script_name);
     }
     goto out;
@@ -758,7 +767,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
             char *args = (char *) switch_xml_attr_soft(xml_script, "args");
 
             if(!zstr(path)) {
-                if(script_launch(NULL, path, args, true) != SWITCH_STATUS_SUCCESS) {
+                if(script_launch(NULL, path, args, NULL, true) != SWITCH_STATUS_SUCCESS) {
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Failed to launch script: %s", path);
                 }
             }

@@ -35,7 +35,11 @@ switch_status_t new_uuid(char **uuid, switch_memory_pool_t *pool) {
     memset((char *)uuid_str, '\0' , sizeof(uuid_str));
     switch_uuid_str(uuid_str, sizeof(uuid_str));
 
-    *uuid = switch_core_strdup(pool, uuid_str);
+    if(pool) {
+        *uuid = switch_core_strdup(pool, uuid_str);
+    } else {
+        *uuid = (char *)strdup(uuid_str);
+    }
 
     return SWITCH_STATUS_SUCCESS;
 }
