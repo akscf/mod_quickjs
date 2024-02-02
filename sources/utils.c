@@ -154,6 +154,10 @@ JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name) {
 void js_ctx_dump_error(script_t *script, JSContext *ctx) {
     JSValue exception_val = JS_GetException(ctx);
 
+    if(script->fl_exit) {
+        return;
+    }
+
     /*if(JS_IsError(ctx, exception_val)) {
     }*/
 

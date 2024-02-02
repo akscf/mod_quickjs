@@ -130,18 +130,18 @@ static JSValue js_global_get(JSContext *ctx, JSValueConst this_val, int argc, JS
 }
 
 static JSValue js_exit(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
     JSValue ret_val;
     const char *exit_code;
 
-    if(!argc) {
+    if(!argc || QJS_IS_NULL(argv[0])) {
+        if(script) {
+            script->fl_exit = true;
+        }
         return JS_EXCEPTION;
     }
 
-    exit_code = (QJS_IS_NULL(argv[0]) ? NULL : JS_ToCString(ctx, argv[0]));
-    if(zstr(exit_code)) {
-        return JS_EXCEPTION;
-    }
-
+    exit_code = JS_ToCString(ctx, argv[0]);
     ret_val = JS_ThrowTypeError(ctx, "ERROR: %s", exit_code);
     JS_FreeCString(ctx, exit_code);
 
