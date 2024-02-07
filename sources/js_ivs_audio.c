@@ -76,6 +76,8 @@ static void *SWITCH_THREAD_FUNC js_ivs_audio_capture_thread(switch_thread_t *thr
         switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
+    switch_channel_audio_sync(channel);
+
     while(true) {
         if(globals.fl_shutdown || !js_ivs->fl_ready || !js_ivs->js_session->fl_ready) {
             break;
@@ -176,8 +178,8 @@ static void *SWITCH_THREAD_FUNC js_ivs_audio_capture_thread(switch_thread_t *thr
         }
 
         // read frame
-        status = switch_core_session_read_frame(session, &read_frame, SWITCH_IO_FLAG_NONE, 0);
-        if(SWITCH_READ_ACCEPTABLE(status) && read_frame && read_frame->samples > 0 && !switch_test_flag(read_frame, SFF_CNG)) {
+        status = switch_core_session_read_frame(session, &read_frame, SWITCH_IO_FLAG_SINGLE_READ, 0);
+        if(SWITCH_READ_ACCEPTABLE(status) && read_frame && read_frame->samples && !switch_test_flag(read_frame, SFF_CNG)) {
             if(switch_core_codec_ready(session_read_codec)) {
                 dec_flags = 0;
                 dec_samplerate = js_ivs->js_session->samplerate;
@@ -268,7 +270,11 @@ static void *SWITCH_THREAD_FUNC js_ivs_audio_capture_thread(switch_thread_t *thr
         // silence timeout
         if(js_ivs->silence_timeout_sec > 0 && (vad_state == SWITCH_VAD_STATE_STOP_TALKING || vad_state == SWITCH_VAD_STATE_NONE)) {
             if(silence_timer == 0) {
-                silence_timer = (switch_epoch_time_now(NULL) + js_ivs->silence_timeout_sec);
+                if(js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_PLAYBACK)) {
+                    silence_timer = 0;
+                } else {
+                    silence_timer = (switch_epoch_time_now(NULL) + js_ivs->silence_timeout_sec);
+                }
             } else if(silence_timer <= switch_epoch_time_now(NULL)) {
                 js_ivs_event_push_simple(IVS_EVENTSQ(js_ivs), IVS_EVENT_SILENCE_TIMEOUT, NULL);
                 silence_timer = 0;

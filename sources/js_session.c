@@ -1216,7 +1216,7 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("sendEvent", 0, js_session_send_event),
     JS_CFUNC_DEF("hangup", 0, js_session_hangup),
     JS_CFUNC_DEF("execute", 0, js_session_execute),
-    JS_CFUNC_DEF("sleep", 1, js_session_sleep), // msec
+    JS_CFUNC_DEF("sleep", 1, js_session_sleep),         // NOTE: is frozes the session and stops som async operations
     JS_CFUNC_DEF("genTones", 1, js_session_gen_tones),
     JS_CFUNC_DEF("getReadCodec", 0, js_session_get_read_codec),
     JS_CFUNC_DEF("getWriteCodec", 0, js_session_get_write_codec),
