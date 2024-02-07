@@ -34,7 +34,6 @@ static void *SWITCH_THREAD_FUNC playback_async_thread(switch_thread_t *thread, v
 }
 
 static switch_status_t read_frame_callback(switch_core_session_t *session, switch_frame_t *frame, void *user_data) {
-    switch_channel_t *channel = switch_core_session_get_channel(session);
     js_ivs_t *js_ivs = (js_ivs_t *)user_data;
 
     if(js_ivs->fl_ready && js_ivs->js_session->fl_ready && frame && frame->datalen > 0) {

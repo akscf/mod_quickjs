@@ -177,7 +177,7 @@ static void *SWITCH_THREAD_FUNC js_ivs_audio_capture_thread(switch_thread_t *thr
 
         // read frame
         status = switch_core_session_read_frame(session, &read_frame, SWITCH_IO_FLAG_NONE, 0);
-        if(SWITCH_READ_ACCEPTABLE(status) && !switch_test_flag(read_frame, SFF_CNG) && read_frame->samples > 0) {
+        if(SWITCH_READ_ACCEPTABLE(status) && read_frame && read_frame->samples > 0 && !switch_test_flag(read_frame, SFF_CNG)) {
             if(switch_core_codec_ready(session_read_codec)) {
                 dec_flags = 0;
                 dec_samplerate = js_ivs->js_session->samplerate;
@@ -221,7 +221,6 @@ static void *SWITCH_THREAD_FUNC js_ivs_audio_capture_thread(switch_thread_t *thr
                 js_ivs->vad_state = vad_state;
                 fl_capture_on = true;
             }
-
 
             if(fl_capture_on) {
                 if(vad_state == SWITCH_VAD_STATE_START_TALKING && switch_buffer_inuse(vad_buffer) > 0) {
@@ -305,18 +304,23 @@ out:
     if(timer.interval) {
         switch_core_timer_destroy(&timer);
     }
+
     if(vad) {
         switch_vad_destroy(&vad);
     }
+
     if(dtmf_buffer) {
         switch_buffer_destroy(&dtmf_buffer);
     }
+
     if(vad_buffer) {
         switch_buffer_destroy(&vad_buffer);
     }
+
     if(chunk_buffer) {
         switch_buffer_destroy(&chunk_buffer);
     }
+
     if(pool) {
         switch_core_destroy_memory_pool(&pool);
     }

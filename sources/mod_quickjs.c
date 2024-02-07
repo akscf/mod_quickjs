@@ -451,6 +451,7 @@ out:
 static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj) {
     volatile script_t *_ref = (script_t *) obj;
     script_t *script = (script_t *) _ref;
+    switch_memory_pool_t *pool = script->pool;
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     uint8_t fl_odbc_enable = false;
     JSContext *ctx = NULL;
@@ -602,7 +603,8 @@ out:
     switch_mutex_unlock(globals.mutex_scripts_map);
 
     switch_core_hash_destroy(&script->classes_map);
-    switch_core_destroy_memory_pool(&script->pool);
+
+    switch_core_destroy_memory_pool(&pool);
 
     if(thread) {
         thread_finished();

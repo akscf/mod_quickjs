@@ -593,6 +593,7 @@ static const JSCFunctionListEntry js_ivs_proto_funcs[] = {
 
 static void js_ivs_finalizer(JSRuntime *rt, JSValue val) {
     js_ivs_t *js_ivs = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
+    switch_memory_pool_t *pool = (js_ivs ? js_ivs->pool : NULL);
     uint8_t fl_wloop = false;
 
     if(!js_ivs) {
@@ -628,8 +629,11 @@ static void js_ivs_finalizer(JSRuntime *rt, JSValue val) {
     js_ivs_audio_queue_term(js_ivs);
     js_ivs_dtmf_queue_term(js_ivs);
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-ivs-finalizer: js_ivs=%p\n", js_ivs);
+    if(pool) {
+        switch_core_destroy_memory_pool(&pool);
+    }
 
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-ivs-finalizer: js_ivs=%p\n", js_ivs);
     js_free_rt(rt, js_ivs);
 }
 
