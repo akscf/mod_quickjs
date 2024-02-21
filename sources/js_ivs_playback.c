@@ -63,22 +63,22 @@ static switch_status_t on_dtmf_callback(switch_core_session_t *session, void *in
 // --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 switch_status_t js_ivs_playback_stop(js_ivs_t *js_ivs) {
     switch_status_t  status = SWITCH_STATUS_SUCCESS;
-    int x = 500; // delay
+    uint32_t x = 0;
 
     if(js_ivs_take(js_ivs)) {
         if(js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_PLAYBACK)) {
+
             switch_channel_set_flag(switch_core_session_get_channel(js_ivs->fs_session), CF_BREAK);
 
             while(js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_PLAYBACK)) {
                 if(globals.fl_shutdown || !js_ivs->fl_ready || !js_ivs->js_session->fl_ready) {
                     break;
                 }
-                if(x > 0) {
+                if(++x > 500) {
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't stop playback (%s)\n", js_ivs->js_session->session_id);
                     status = SWITCH_STATUS_FALSE;
                     break;
                 }
-                x--;
                 switch_yield(10000);
             }
         }
@@ -157,8 +157,8 @@ switch_status_t js_ivs_say(js_ivs_t *js_ivs, char *language, char *text, uint8_t
             switch_channel_clear_flag(channel, CF_BREAK);
         }
 
-        for(int x = 0; x < 10; x++) {
-            switch_frame_t *read_frame;
+        for(int x = 0; x < 5; x++) {
+            switch_frame_t *read_frame = NULL;
             status = switch_core_session_read_frame(js_ivs->fs_session, &read_frame, SWITCH_IO_FLAG_NONE, 0);
             if(!SWITCH_READ_ACCEPTABLE(status)) { break; }
         }
@@ -255,8 +255,8 @@ switch_status_t js_ivs_playback(js_ivs_t *js_ivs, char *path, uint8_t async) {
             switch_channel_clear_flag(channel, CF_BREAK);
         }
 
-        for(int x = 0; x < 10; x++) {
-            switch_frame_t *read_frame;
+        for(int x = 0; x < 5; x++) {
+            switch_frame_t *read_frame = NULL;
             status = switch_core_session_read_frame(js_ivs->fs_session, &read_frame, SWITCH_IO_FLAG_NONE, 0);
             if(!SWITCH_READ_ACCEPTABLE(status)) { break; }
         }

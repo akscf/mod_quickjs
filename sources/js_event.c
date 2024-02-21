@@ -167,7 +167,6 @@ static JSValue js_event_fire(JSContext *ctx, JSValueConst this_val, int argc, JS
     EVENT_SANITY_CHECK();
 
     switch_event_fire(&js_event->event);
-    switch_safe_free(js_event);
 
     return JS_TRUE;
 }

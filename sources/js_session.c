@@ -1235,6 +1235,8 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
 
     jss->fl_ready = false;
 
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-finalizer: DD1\n");
+
     if(jss->mutex) {
         switch_mutex_lock(jss->mutex);
         fl_wloop = (jss->wlock > 0);
@@ -1251,6 +1253,8 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
         }
     }
 
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-finalizer: DD2\n");
+
     if(jss->session) {
         switch_channel_t *channel = switch_core_session_get_channel(jss->session);
 
@@ -1258,13 +1262,16 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
         switch_core_event_hook_remove_state_change(jss->session, sys_session_hangup_hook);
 
         if(jss->fl_hup_auto) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-finalizer: DD3\n");
             switch_channel_hangup(channel, SWITCH_CAUSE_NORMAL_CLEARING);
         }
 
         if(jss->fl_no_unlock == false) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-finalizer: DD4\n");
             switch_core_session_rwunlock(jss->session);
         }
     }
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-finalizer: DD5\n");
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-session-finalizer: jss=%p, session=%p\n", jss, jss->session);
 
@@ -1337,7 +1344,8 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
 
     if(!jss->session) {
         error = JS_ThrowTypeError(ctx, "Couldn't create a new session");
-        has_error = true; goto fail;
+        has_error = true;
+        goto fail;
     }
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");

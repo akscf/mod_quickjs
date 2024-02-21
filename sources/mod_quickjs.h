@@ -24,7 +24,7 @@
 #define BASE64_ENC_SZ(n) (4*(n/3))
 #define BASE64_DEC_SZ(n) ((n*3)/4)
 #define JID_NONE    0x0
-#define MOD_VERSION "1.6 (a5)"
+#define MOD_VERSION "1.6 (a7)"
 
 typedef struct {
     switch_mutex_t          *mutex;

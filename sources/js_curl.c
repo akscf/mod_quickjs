@@ -618,7 +618,6 @@ static void js_curl_finalizer(JSRuntime *rt, JSValue val) {
     }
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-curl-finalizer: js_curl=%p (destroyed)\n", js_curl);
-
     js_free_rt(rt, js_curl);
 }
 

@@ -152,15 +152,11 @@ JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name) {
 }
 
 void js_ctx_dump_error(script_t *script, JSContext *ctx) {
-    JSValue exception_val = JS_GetException(ctx);
-
     if(script->fl_exit) {
         return;
     }
 
-    /*if(JS_IsError(ctx, exception_val)) {
-    }*/
-
+    JSValue exception_val = JS_GetException(ctx);
     JSValue stk_val = JS_GetPropertyStr(ctx, exception_val, "stack");
     const char *err_str = JS_ToCString(ctx, exception_val);
     const char *stk_str = (JS_IsUndefined(stk_val) ? NULL : JS_ToCString(ctx, stk_val));

@@ -11,6 +11,8 @@
 #define BIT_CLEAR(a,b) ((a) &= ~(1UL<<(b)))
 #define BIT_CHECK(a,b) (!!((a) & (1UL<<(b))))
 
+#define IVS_TIMERS_MAX                  10
+
 #define IVS_EVENTS_QUEUE_SIZE           64
 #define IVS_AUDIO_QUEUE_SIZE            64
 #define IVS_DTMF_QUEUE_SIZE             64
@@ -34,6 +36,9 @@
 #define IVS_EVENT_AUDIO_CHUNK_READY     0x05
 #define IVS_EVENT_DTMF_BUFFER_READY     0x06
 #define IVS_EVENT_SILENCE_TIMEOUT       0x07
+#define IVS_EVENT_TIMER_TIMEOUT         0x08
+#define IVS_EVENT_SESSION_TIMEOUT       0x09
+#define IVS_EVENT_TRANSCRIPTION_READY   0x10
 
 #define IVS_XFLAG_PLAYBACK              0x01
 #define IVS_XFLAG_AUDIO_CNG_ENABLED     0x02
@@ -43,17 +48,30 @@
 #define IVS_XFLAG_VIDEO_CAP_PAUSE       0x06
 #define IVS_XFLAG_AUDIO_CAP_DO_STOP     0x07
 #define IVS_XFLAG_VIDEO_CAP_DO_STOP     0x08
+#define IVS_XFLAG_TEHANDLER_INSTALLED   0x09
+#define IVS_XFLAG_SRVC_THR_ACTIVE       0xF0
+#define IVS_XFLAG_SRVC_THR_DO_STOP      0xF1
+
+#define IVS_TIMER_REGL                  0x00
+#define IVS_TIMER_ONCE                  0x01
 
 #define IVS_AUDIOQ(ivs)     (ivs->audioq)
 #define IVS_DTMFQ(ivs)      (ivs->dtmfq)
 #define IVS_EVENTSQ(ivs)    (ivs->eventsq)
 
+typedef struct {
+    uint32_t    mode;
+    uint32_t    interval;
+    time_t      timer;
+
+} js_ivs_timer_t;
 
 typedef struct {
     switch_memory_pool_t    *pool;
     js_session_t            *js_session;
     switch_core_session_t   *fs_session;
     switch_mutex_t          *mutex;
+    switch_mutex_t          *mutex_timers;
     switch_queue_t          *eventsq;
     switch_queue_t          *audioq;
     switch_queue_t          *dtmfq;
@@ -61,6 +79,8 @@ typedef struct {
     char                    *language;                  // context preferred language
     char                    *tts_engine;
     char                    *asr_engine;
+    char                    *origin;
+    js_ivs_timer_t          timers[IVS_TIMERS_MAX + 1]; //
     uint32_t                cng_lvl;
     uint32_t                xflags;
     uint32_t                wlock;                      // for async jobs
@@ -70,7 +90,8 @@ typedef struct {
     uint32_t                audio_chunk_sec;            //
     uint32_t                audio_chunk_type;           // file, buffer,...
     uint32_t                audio_chunk_encoding;       // raw,wav,mp3,b64,..
-    uint32_t                silence_timeout_sec;        // sec
+    uint32_t                silence_timeout_sec;        // >0 sec
+    uint32_t                session_timeout_sec;        // >0
     uint32_t                vad_voice_ms;
     uint32_t                vad_silence_ms;
     uint32_t                vad_threshold;
@@ -153,6 +174,13 @@ switch_status_t js_ivs_event_push_dh(switch_queue_t *queue, uint32_t jid, uint32
 
 switch_status_t js_ivs_event_push_audio_chunk_ready(switch_queue_t *queue, uint32_t samplerate, uint32_t channels, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len);
 switch_status_t js_ivs_event_push_audio_chunk_ready_zcopy(switch_queue_t *queue, uint32_t samplerate, uint32_t channels, uint32_t time, uint32_t length, switch_byte_t *data, uint32_t data_len);
+
+switch_status_t js_ivs_event_push_timer_timeout(switch_queue_t *queue, uint32_t timer_id);
+switch_status_t js_ivs_event_push_session_timeout(switch_queue_t *queue);
+
+/* js_ivs_srvc.c */
+switch_status_t js_ivs_service_thread_start(js_ivs_t *js_ivs);
+
 
 #endif
 

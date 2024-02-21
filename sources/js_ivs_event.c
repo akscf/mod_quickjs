@@ -125,3 +125,40 @@ switch_status_t js_ivs_event_push_audio_chunk_ready_zcopy(switch_queue_t *queue,
     return js_ivs_event_push_dh(queue, JID_NONE, IVS_EVENT_AUDIO_CHUNK_READY, chunk, sizeof(js_ivs_event_payload_audio_chunk_t), (js_ivs_event_payload_destroy_handler_t *)js_ivs_event_payload_free_audio_chunk);
 }
 
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// timer events
+switch_status_t js_ivs_event_push_timer_timeout(switch_queue_t *queue, uint32_t timer_id) {
+    js_ivs_event_t *event = NULL;
+
+    switch_assert(queue);
+
+    switch_zmalloc(event, sizeof(js_ivs_event_t));
+    event->type = IVS_EVENT_TIMER_TIMEOUT;
+    event->payload_len = timer_id; // !!!
+    event->payload = NULL;
+
+    if(switch_queue_trypush(queue, event) == SWITCH_STATUS_SUCCESS) {
+        return SWITCH_STATUS_SUCCESS;
+    }
+
+    js_ivs_event_free(&event);
+    return SWITCH_STATUS_FALSE;
+}
+
+switch_status_t js_ivs_event_push_session_timeout(switch_queue_t *queue) {
+    js_ivs_event_t *event = NULL;
+
+    switch_assert(queue);
+
+    switch_zmalloc(event, sizeof(js_ivs_event_t));
+    event->type = IVS_EVENT_SESSION_TIMEOUT;
+    event->payload_len = 0;
+    event->payload = NULL;
+
+    if(switch_queue_trypush(queue, event) == SWITCH_STATUS_SUCCESS) {
+        return SWITCH_STATUS_SUCCESS;
+    }
+
+    js_ivs_event_free(&event);
+    return SWITCH_STATUS_FALSE;
+}

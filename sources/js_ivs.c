@@ -19,9 +19,10 @@
 #define PROP_DTMF_MAX_DIGITS                12
 #define PROP_DTMF_MAX_IDLE                  13
 #define PROP_SILENCE_TIMOUT                 14
-#define PROP_TTS_ENGINE                     15
-#define PROP_ASR_ENGINE                     16
-#define PROP_LANGUAGE                       17
+#define PROP_SESSION_TIMOUT                 15
+#define PROP_TTS_ENGINE                     16
+#define PROP_ASR_ENGINE                     17
+#define PROP_LANGUAGE                       18
 #define PROP_IS_AUDIO_CAPTURE_ACTIVE        30
 #define PROP_IS_VIDEO_CAPTURE_ACTIVE        31
 #define PROP_IS_AUDIO_CAPTURE_ON_PAUSE      32
@@ -79,6 +80,9 @@ static JSValue js_ivs_property_get(JSContext *ctx, JSValueConst this_val, int ma
         }
         case PROP_SILENCE_TIMOUT: {
             return JS_NewInt32(ctx, js_ivs->silence_timeout_sec);
+        }
+        case PROP_SESSION_TIMOUT: {
+            return JS_NewInt32(ctx, js_ivs->session_timeout_sec);
         }
         case PROP_TTS_ENGINE: {
             return JS_NewString(ctx, js_ivs->tts_engine);
@@ -190,12 +194,15 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
         }
         case PROP_SILENCE_TIMOUT: {
             if(QJS_IS_NULL(val)) { return JS_FALSE; }
-            JS_ToUint32(ctx, &ival, val);
-            if(ival >= 1) {
-                js_ivs->silence_timeout_sec = ival;
-                return JS_TRUE;
-            }
-            return JS_FALSE;
+            JS_ToUint32(ctx, &js_ivs->silence_timeout_sec, val);
+            return JS_TRUE;
+        }
+        case PROP_SESSION_TIMOUT: {
+            if(QJS_IS_NULL(val)) { return JS_FALSE; }
+            switch_mutex_lock(js_ivs->mutex_timers);
+            JS_ToUint32(ctx, &js_ivs->session_timeout_sec, val);
+            switch_mutex_unlock(js_ivs->mutex_timers);
+            return JS_TRUE;
         }
         case PROP_TTS_ENGINE: {
             switch_mutex_lock(js_ivs->mutex);
@@ -476,6 +483,126 @@ static JSValue js_do_say_with_lang(JSContext *ctx, JSValueConst this_val, int ar
     return ret_val;
 }
 
+static JSValue js_timers_start(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
+    JSValue ret_val = JS_TRUE;
+
+    if(!js_ivs) {
+        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
+    }
+
+    if(!js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_SRVC_THR_ACTIVE)) {
+        if(js_ivs_service_thread_start(js_ivs) != SWITCH_STATUS_SUCCESS) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't start service thread\n");
+            ret_val = JS_FALSE;
+        }
+    }
+
+    return ret_val;
+}
+
+static JSValue js_timers_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
+
+    if(!js_ivs) {
+        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
+    }
+
+    if(js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_SRVC_THR_ACTIVE)) {
+        js_ivs_xflags_set(js_ivs, IVS_XFLAG_SRVC_THR_DO_STOP, true);
+    }
+
+    return JS_TRUE;
+}
+
+// timerSetup(id, intervalSec, ['once']);
+static JSValue js_timer_setup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
+    JSValue ret_val = JS_FALSE;
+    const char *mode = NULL;
+    uint32_t timer_id = 0, timer_val = 0, flags = 0x0;
+
+    if(!js_ivs) {
+        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
+    }
+
+    if(argc < 2) {
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: timerId");
+    }
+    if(QJS_IS_NULL(argv[1])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: interval");
+    }
+    if(argc > 2 && !QJS_IS_NULL(argv[2])) {
+        mode = JS_ToCString(ctx, argv[2]);
+        if(mode) {
+            if(strcasecmp(mode, "once") == 0) {flags = IVS_TIMER_ONCE;}
+        }
+    }
+
+    JS_ToUint32(ctx, &timer_id, argv[0]);
+    JS_ToUint32(ctx, &timer_val, argv[1]);
+
+    if(timer_id > IVS_TIMERS_MAX) {
+        timer_id = IVS_TIMERS_MAX;
+    }
+
+    switch_mutex_lock(js_ivs->mutex_timers);
+    js_ivs->timers[timer_id].mode = flags;
+    js_ivs->timers[timer_id].interval = timer_val;
+    js_ivs->timers[timer_id].timer = (timer_val > 0 ? (switch_epoch_time_now(NULL) + timer_val) : 0);
+    switch_mutex_unlock(js_ivs->mutex_timers);
+
+out:
+    JS_FreeCString(ctx, mode);
+    return ret_val;
+}
+
+/* transcribe(chunkType, chunkData, samplerate, channels, [apiKey]) */
+static JSValue js_do_transcribe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
+    JSValue ret_val = JS_FALSE;
+    switch_event_t *event = NULL;
+    const char *chunkType = NULL;
+    const char *chunkData = NULL;
+    const char *apiKey = NULL;
+    switch_size_t chunk_data_size = 0;
+    uint32_t samplerate=0, channels=0, rqid = 0;
+
+    if(!js_ivs) {
+        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
+    }
+    if(!js_ivs->asr_engine) {
+        return JS_ThrowTypeError(ctx, "ASR engine not defined");
+    }
+    if(argc < 4) {
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: chunkType");
+    }
+    if(QJS_IS_NULL(argv[1])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: chunkData");
+    }
+    if(QJS_IS_NULL(argv[2])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: samperate");
+    }
+    if(QJS_IS_NULL(argv[3])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: channels");
+    }
+
+    return JS_ThrowTypeError(ctx, "Not yet implemented");
+
+out:
+    JS_FreeCString(ctx, apiKey);
+    JS_FreeCString(ctx, chunkType);
+    JS_FreeCString(ctx, chunkData);
+    return ret_val;
+}
+
 static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
     JSValue ret_val = JS_FALSE;
@@ -507,6 +634,10 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "silence-timeout"));
                     break;
                 }
+                case IVS_EVENT_SESSION_TIMEOUT: {
+                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "session-timeout"));
+                    break;
+                }
                 case IVS_EVENT_PLAYBACK_START: {
                     edata_obj = JS_NewObject(ctx);
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "playback-start"));
@@ -526,6 +657,13 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "dtmf-buffer-ready"));
                     JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
                     JS_SetPropertyStr(ctx, edata_obj, "digits", JS_NewStringLen(ctx, event->payload, event->payload_len));
+                    break;
+                }
+                case IVS_EVENT_TIMER_TIMEOUT: {
+                    edata_obj = JS_NewObject(ctx);
+                    JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "timer-timeout"));
+                    JS_SetPropertyStr(ctx, ret_val, "data", edata_obj);
+                    JS_SetPropertyStr(ctx, edata_obj, "timer", JS_NewInt32(ctx, event->payload_len)); // it's ok, value keept in len
                     break;
                 }
                 case IVS_EVENT_AUDIO_CHUNK_READY: {
@@ -578,6 +716,7 @@ static const JSCFunctionListEntry js_ivs_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("dtmfMaxDigits", js_ivs_property_get, js_ivs_property_set, PROP_DTMF_MAX_DIGITS),
     JS_CGETSET_MAGIC_DEF("dtmMaxIdle", js_ivs_property_get, js_ivs_property_set, PROP_DTMF_MAX_IDLE),
     JS_CGETSET_MAGIC_DEF("silenceTimeout", js_ivs_property_get, js_ivs_property_set, PROP_SILENCE_TIMOUT),
+    JS_CGETSET_MAGIC_DEF("sessionTimeout", js_ivs_property_get, js_ivs_property_set, PROP_SESSION_TIMOUT),
     JS_CGETSET_MAGIC_DEF("ttsEngine", js_ivs_property_get, js_ivs_property_set, PROP_TTS_ENGINE),
     JS_CGETSET_MAGIC_DEF("asrEngine", js_ivs_property_get, js_ivs_property_set, PROP_ASR_ENGINE),
     JS_CGETSET_MAGIC_DEF("language", js_ivs_property_get, js_ivs_property_set, PROP_LANGUAGE),
@@ -589,6 +728,10 @@ static const JSCFunctionListEntry js_ivs_proto_funcs[] = {
     JS_CFUNC_DEF("say2", 1, js_do_say_with_lang),
     JS_CFUNC_DEF("playbackStop", 1, js_playback_stop),
     JS_CFUNC_DEF("getEvent", 1, js_ivs_get_event),
+    JS_CFUNC_DEF("timersStart", 1, js_timers_start),
+    JS_CFUNC_DEF("timersStop", 1, js_timers_stop),
+    JS_CFUNC_DEF("timerSetup", 1, js_timer_setup),  // seconds timers
+    JS_CFUNC_DEF("transcribe", 1, js_do_transcribe)
 };
 
 static void js_ivs_finalizer(JSRuntime *rt, JSValue val) {
@@ -635,6 +778,7 @@ static void js_ivs_finalizer(JSRuntime *rt, JSValue val) {
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-ivs-finalizer: js_ivs=%p\n", js_ivs);
     js_free_rt(rt, js_ivs);
+
 }
 
 /*
@@ -692,6 +836,7 @@ static JSValue js_ivs_contructor(JSContext *ctx, JSValueConst new_target, int ar
     }
 
     switch_mutex_init(&js_ivs->mutex, SWITCH_MUTEX_NESTED, pool);
+    switch_mutex_init(&js_ivs->mutex_timers, SWITCH_MUTEX_NESTED, pool);
     switch_queue_create(&js_ivs->eventsq, IVS_EVENTS_QUEUE_SIZE, pool);
     switch_queue_create(&js_ivs->audioq, IVS_EVENTS_QUEUE_SIZE, pool);
     switch_queue_create(&js_ivs->dtmfq, IVS_DTMF_QUEUE_SIZE, pool);
@@ -712,6 +857,7 @@ static JSValue js_ivs_contructor(JSContext *ctx, JSValueConst new_target, int ar
     js_ivs->silence_timeout_sec = 0;
     js_ivs->audio_chunk_type = IVS_CHUNK_TYPE_BUFFER;
     js_ivs->audio_chunk_encoding = IVS_CHUNK_ENCODING_RAW;
+    js_ivs->origin = switch_core_sprintf(pool, "%p", js_ivs);
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
