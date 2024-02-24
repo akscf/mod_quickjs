@@ -561,6 +561,38 @@ out:
     return ret_val;
 }
 
+// timerCancel(id)
+static JSValue js_timer_cancel(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
+    uint32_t timer_id = 0;
+
+    if(!js_ivs) {
+        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
+    }
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    }
+
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "Invalid argument: timerId");
+    }
+    JS_ToUint32(ctx, &timer_id, argv[0]);
+
+    if(timer_id > IVS_TIMERS_MAX) {
+        timer_id = IVS_TIMERS_MAX;
+    }
+
+    switch_mutex_lock(js_ivs->mutex_timers);
+    js_ivs->timers[timer_id].interval = 0x0;
+    js_ivs->timers[timer_id].timer = 0x0;
+    switch_mutex_unlock(js_ivs->mutex_timers);
+
+out:
+    return JS_TRUE;
+}
+
+
 /* transcribe(chunkType, chunkData, samplerate, channels, [apiKey]) */
 static JSValue js_do_transcribe(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
@@ -681,7 +713,11 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
                         if(js_ivs->audio_chunk_type == IVS_CHUNK_TYPE_FILE) {
                             JS_SetPropertyStr(ctx, edata_obj, "file", JS_NewStringLen(ctx, payload->data, payload->data_len));
                         } else if(js_ivs->audio_chunk_type == IVS_CHUNK_TYPE_BUFFER) {
-                            JS_SetPropertyStr(ctx, edata_obj, "buffer", JS_NewArrayBufferCopy(ctx, payload->data, payload->data_len));
+                            if(js_ivs->audio_chunk_encoding == IVS_CHUNK_ENCODING_B64) {
+                               JS_SetPropertyStr(ctx, edata_obj, "buffer", JS_NewStringLen(ctx, payload->data, (payload->data_len > 1 ? (payload->data_len - 1) : payload->data_len)));
+                            } else {
+                                JS_SetPropertyStr(ctx, edata_obj, "buffer", JS_NewArrayBufferCopy(ctx, payload->data, (payload->data_len > 1 ? payload->data_len - 1 : payload->data_len)));
+                            }
                         }
                     }
                     break;
@@ -731,6 +767,7 @@ static const JSCFunctionListEntry js_ivs_proto_funcs[] = {
     JS_CFUNC_DEF("timersStart", 1, js_timers_start),
     JS_CFUNC_DEF("timersStop", 1, js_timers_stop),
     JS_CFUNC_DEF("timerSetup", 1, js_timer_setup),  // seconds timers
+    JS_CFUNC_DEF("timerCancel", 1, js_timer_cancel),
     JS_CFUNC_DEF("transcribe", 1, js_do_transcribe)
 };
 
