@@ -220,8 +220,15 @@ static JSValue js_md5(JSContext *ctx, JSValueConst this_val, int argc, JSValueCo
     return JS_NewStringLen(ctx, digest, sizeof(digest));
 }
 
+/* seconds */
 static JSValue js_epoch_time(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     time_t tm = switch_epoch_time_now(NULL);
+    return JS_NewInt64(ctx, tm);
+}
+
+/* microseconds */
+static JSValue js_micro_time(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    time_t tm = switch_mono_micro_time_now(); //switch_micro_time_now();
     return JS_NewInt64(ctx, tm);
 }
 
@@ -562,6 +569,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "md5", JS_NewCFunction(ctx, js_md5, "md5", 1));
     JS_SetPropertyStr(ctx, global_obj, "unlink", JS_NewCFunction(ctx, js_unlink, "unlink", 1));
     JS_SetPropertyStr(ctx, global_obj, "epochTime", JS_NewCFunction(ctx, js_epoch_time, "epochTime", 1));
+    JS_SetPropertyStr(ctx, global_obj, "microTime", JS_NewCFunction(ctx, js_micro_time, "microTime", 1));
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
@@ -582,7 +590,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     // eval
     script->fl_ready = true;
     result = JS_Eval(ctx, script->script_buf, script->script_len, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
-    script->fl_ready = false;
 
     if(JS_IsException(result)) {
         js_ctx_dump_error(script, ctx);
@@ -593,12 +600,15 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 
 out:
     JS_FreeValue(ctx, global_obj);
-
     script->fl_destroyed = true;
     script_wait_unlock(script);
 
     if(ctx) { JS_FreeContext(ctx); }
     if(rt)  { JS_FreeRuntime(rt); }
+
+    /* ready must be changed only after rt/ctx been destroyed! */
+    /* Otherwise it corrupts js_session */
+    script->fl_ready = false;
 
     script->rt = NULL;
     script->ctx = NULL;

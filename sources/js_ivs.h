@@ -99,6 +99,7 @@ typedef struct {
     uint8_t                 fl_jss_need_unlock;
     uint8_t                 fl_fss_need_unlock;
     uint8_t                 fl_ready;
+    uint8_t                 fl_destroyed;
 } js_ivs_t;
 
 JSClassID js_ivs_get_classid(JSContext *ctx);

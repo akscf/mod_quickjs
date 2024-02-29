@@ -79,7 +79,7 @@ static void *SWITCH_THREAD_FUNC js_ivs_audio_capture_thread(switch_thread_t *thr
     switch_channel_audio_sync(channel);
 
     while(true) {
-        if(globals.fl_shutdown || !js_ivs->fl_ready || !js_ivs->js_session->fl_ready) {
+        if(globals.fl_shutdown || js_ivs->fl_destroyed || !js_ivs->fl_ready || !js_ivs->js_session->fl_ready) {
             break;
         }
         if(js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_AUDIO_CAP_DO_STOP)) {

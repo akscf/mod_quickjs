@@ -146,6 +146,8 @@ JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name) {
         }
         switch_mutex_unlock(script->classes_map_mutex);
         script_sem_release(script);
+    } else  {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "script_sem_take() fail\n");
     }
 
     return id;

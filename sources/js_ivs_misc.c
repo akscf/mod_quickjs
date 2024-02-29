@@ -7,7 +7,9 @@
 uint32_t js_ivs_take(js_ivs_t *js_ivs) {
     uint32_t status = false;
 
-    if(!js_ivs) { return false; }
+    if(!js_ivs || js_ivs->fl_destroyed) {
+        return false;
+    }
 
     switch_mutex_lock(js_ivs->mutex);
     if(js_ivs->fl_ready) {
@@ -30,7 +32,7 @@ void js_ivs_release(js_ivs_t *js_ivs) {
 uint32_t js_ivs_gen_job_id(js_ivs_t *js_ivs) {
     uint32_t ret = 0;
 
-    if(!js_ivs) { return false; }
+    if(!js_ivs || js_ivs->fl_destroyed) { return false; }
 
     switch_mutex_lock(js_ivs->mutex);
 

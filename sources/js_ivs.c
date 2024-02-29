@@ -30,11 +30,20 @@
 
 static void js_ivs_finalizer(JSRuntime *rt, JSValue val);
 
+#define JS_IVS_SANITY_CHECK() do { \
+            if(!js_ivs) { \
+                return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)"); \
+            } \
+            if(js_ivs->fl_destroyed) { \
+                return JS_ThrowTypeError(ctx, "Object destroyed"); \
+            } \
+        } while(0)
+
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_ivs_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
 
-    if(!js_ivs) {
+    if(!js_ivs || js_ivs->fl_destroyed) {
         return JS_UNDEFINED;
     }
 
@@ -116,7 +125,7 @@ static JSValue js_ivs_property_set(JSContext *ctx, JSValueConst this_val, JSValu
     const char *str = NULL;
     int copy = 1, success = 1;
 
-    if(!js_ivs) {
+    if(!js_ivs || js_ivs->fl_destroyed) {
         return JS_UNDEFINED;
     }
 
@@ -255,9 +264,7 @@ static JSValue js_start_capture(JSContext *ctx, JSValueConst this_val, int argc,
     const char *chunk_type = NULL;
     const char *chunk_enc = NULL;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(argc < 1)  {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
@@ -304,9 +311,7 @@ static JSValue js_pause_capturing(JSContext *ctx, JSValueConst this_val, int arg
     const char *what = NULL;
     JSValue ret_val = JS_FALSE;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(argc > 0 && !QJS_IS_NULL(argv[0])) {
         what = JS_ToCString(ctx, argv[0]);
@@ -330,9 +335,7 @@ static JSValue js_stop_capturing(JSContext *ctx, JSValueConst this_val, int argc
     const char *what = NULL;
     JSValue ret_val = JS_FALSE;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(argc > 0 && !QJS_IS_NULL(argv[0])) {
         what = JS_ToCString(ctx, argv[0]);
@@ -353,9 +356,7 @@ static JSValue js_stop_capturing(JSContext *ctx, JSValueConst this_val, int argc
 static JSValue js_playback_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     js_ivs_playback_stop(js_ivs);
 
@@ -369,9 +370,7 @@ static JSValue js_do_playback(JSContext *ctx, JSValueConst this_val, int argc, J
     int fl_async = false, fl_delete = false;
     JSValue ret_val = JS_UNDEFINED;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(argc < 1) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
@@ -409,9 +408,7 @@ static JSValue js_do_say(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     int fl_async = false;
     JSValue ret_val = JS_UNDEFINED;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(argc < 1) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
@@ -446,9 +443,7 @@ static JSValue js_do_say_with_lang(JSContext *ctx, JSValueConst this_val, int ar
     int fl_async = false;
     JSValue ret_val = JS_UNDEFINED;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(argc < 1) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
@@ -487,9 +482,7 @@ static JSValue js_timers_start(JSContext *ctx, JSValueConst this_val, int argc, 
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
     JSValue ret_val = JS_TRUE;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(!js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_SRVC_THR_ACTIVE)) {
         if(js_ivs_service_thread_start(js_ivs) != SWITCH_STATUS_SUCCESS) {
@@ -504,9 +497,7 @@ static JSValue js_timers_start(JSContext *ctx, JSValueConst this_val, int argc, 
 static JSValue js_timers_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_SRVC_THR_ACTIVE)) {
         js_ivs_xflags_set(js_ivs, IVS_XFLAG_SRVC_THR_DO_STOP, true);
@@ -522,9 +513,7 @@ static JSValue js_timer_setup(JSContext *ctx, JSValueConst this_val, int argc, J
     const char *mode = NULL;
     uint32_t timer_id = 0, timer_val = 0, flags = 0x0;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(argc < 2) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
@@ -566,9 +555,7 @@ static JSValue js_timer_cancel(JSContext *ctx, JSValueConst this_val, int argc, 
     js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
     uint32_t timer_id = 0;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(argc < 1) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
@@ -604,9 +591,8 @@ static JSValue js_do_transcribe(JSContext *ctx, JSValueConst this_val, int argc,
     switch_size_t chunk_data_size = 0;
     uint32_t samplerate=0, channels=0, rqid = 0;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
+
     if(!js_ivs->asr_engine) {
         return JS_ThrowTypeError(ctx, "ASR engine not defined");
     }
@@ -642,9 +628,7 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
     uint8_t fl_found = false;
     void *pop = NULL;
 
-    if(!js_ivs) {
-        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
-    }
+    JS_IVS_SANITY_CHECK();
 
     if(switch_queue_trypop(IVS_EVENTSQ(js_ivs), &pop) == SWITCH_STATUS_SUCCESS) {
         js_ivs_event_t *event = (js_ivs_event_t *)pop;
@@ -652,7 +636,7 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
             fl_found = true;
             ret_val = JS_NewObject(ctx);
 
-            JS_SetPropertyStr(ctx, ret_val, "jid",     JS_NewInt32(ctx, event->jid));
+            JS_SetPropertyStr(ctx, ret_val, "jid", JS_NewInt32(ctx, event->jid));
             switch(event->type) {
                 case IVS_EVENT_SPEAKING_START: {
                     JS_SetPropertyStr(ctx, ret_val, "type", JS_NewString(ctx, "speaking-start"));
@@ -729,6 +713,52 @@ static JSValue js_ivs_get_event(JSContext *ctx, JSValueConst this_val, int argc,
     return ret_val;
 }
 
+/* free js_session */
+static JSValue js_do_soft_destroy(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_ivs_t *js_ivs = JS_GetOpaque2(ctx, this_val, js_ivs_get_classid(ctx));
+    uint8_t fl_wloop = false;
+
+    if(!js_ivs) {
+        return JS_ThrowTypeError(ctx, "Malformed reference (js_ivs == NULL)");
+    }
+    if(js_ivs->fl_destroyed) {
+        return JS_TRUE;
+    }
+
+    js_ivs->fl_ready = false;
+    js_ivs_xflags_set(js_ivs, IVS_XFLAG_SRVC_THR_DO_STOP, true);
+    js_ivs_xflags_set(js_ivs, IVS_XFLAG_AUDIO_CAP_DO_STOP, true);
+    js_ivs_xflags_set(js_ivs, IVS_XFLAG_VIDEO_CAP_DO_STOP, true);
+
+    switch_mutex_lock(js_ivs->mutex);
+    fl_wloop = (js_ivs->wlock > 0);
+    switch_mutex_unlock(js_ivs->mutex);
+
+    if(fl_wloop) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for unlock ('%d' locks) ...\n", js_ivs->wlock);
+        while(fl_wloop) {
+            switch_mutex_lock(js_ivs->mutex);
+            fl_wloop = (js_ivs->wlock > 0);
+            switch_mutex_unlock(js_ivs->mutex);
+            switch_yield(100000);
+        }
+    }
+
+    if(js_ivs->fs_session && js_ivs->fl_fss_need_unlock) {
+        switch_core_session_rwunlock(js_ivs->fs_session);
+    }
+
+    if(js_ivs->js_session && js_ivs->fl_jss_need_unlock) {
+        js_session_release(js_ivs->js_session);
+    }
+
+    js_ivs->fl_destroyed = false;
+    js_ivs->js_session = NULL;
+    js_ivs->fs_session = NULL;
+
+    return JS_TRUE;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSClassDef js_ivs_class = {
     CLASS_NAME,
@@ -768,7 +798,8 @@ static const JSCFunctionListEntry js_ivs_proto_funcs[] = {
     JS_CFUNC_DEF("timersStop", 1, js_timers_stop),
     JS_CFUNC_DEF("timerSetup", 1, js_timer_setup),  // seconds timers
     JS_CFUNC_DEF("timerCancel", 1, js_timer_cancel),
-    JS_CFUNC_DEF("transcribe", 1, js_do_transcribe)
+    JS_CFUNC_DEF("transcribe", 1, js_do_transcribe),
+    JS_CFUNC_DEF("destroy", 1, js_do_soft_destroy)
 };
 
 static void js_ivs_finalizer(JSRuntime *rt, JSValue val) {
@@ -782,12 +813,17 @@ static void js_ivs_finalizer(JSRuntime *rt, JSValue val) {
     }
 
     js_ivs->fl_ready = false;
+    js_ivs->fl_destroyed = true;
+
+    js_ivs_xflags_set(js_ivs, IVS_XFLAG_SRVC_THR_DO_STOP, true);
+    js_ivs_xflags_set(js_ivs, IVS_XFLAG_AUDIO_CAP_DO_STOP, true);
+    js_ivs_xflags_set(js_ivs, IVS_XFLAG_VIDEO_CAP_DO_STOP, true);
 
     switch_mutex_lock(js_ivs->mutex);
     fl_wloop = (js_ivs->wlock > 0);
     switch_mutex_unlock(js_ivs->mutex);
 
-    if(js_ivs->wlock > 0) {
+    if(fl_wloop) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for unlock ('%d' locks) ...\n", js_ivs->wlock);
         while(fl_wloop) {
             switch_mutex_lock(js_ivs->mutex);
@@ -797,11 +833,11 @@ static void js_ivs_finalizer(JSRuntime *rt, JSValue val) {
         }
     }
 
-    if(js_ivs->fl_fss_need_unlock && js_ivs->fs_session) {
+    if(js_ivs->fs_session && js_ivs->fl_fss_need_unlock) {
         switch_core_session_rwunlock(js_ivs->fs_session);
     }
 
-    if(js_ivs->fl_jss_need_unlock && js_ivs->js_session) {
+    if(js_ivs->js_session && js_ivs->fl_jss_need_unlock) {
         js_session_release(js_ivs->js_session);
     }
 

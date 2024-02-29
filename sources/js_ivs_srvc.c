@@ -13,7 +13,7 @@ static void *SWITCH_THREAD_FUNC js_ivs_service_thread(switch_thread_t *thread, v
     time_t cur_time = 0, session_timer = 0;
 
     while(true) {
-        if(globals.fl_shutdown || !js_ivs->fl_ready || !js_ivs->js_session->fl_ready) {
+        if(globals.fl_shutdown || js_ivs->fl_destroyed || !js_ivs->fl_ready) {
             break;
         }
         if(js_ivs_xflags_test_unsafe(js_ivs, IVS_XFLAG_SRVC_THR_DO_STOP)) {
@@ -32,10 +32,7 @@ static void *SWITCH_THREAD_FUNC js_ivs_service_thread(switch_thread_t *thread, v
                 }
             }
         }
-        switch_mutex_unlock(js_ivs->mutex_timers);
 
-
-        switch_mutex_lock(js_ivs->mutex_timers);
         cur_time = switch_epoch_time_now(NULL);
         for(timer_id = 0; timer_id < IVS_TIMERS_MAX; timer_id++) {
             if(timers[timer_id].timer > 0 && timers[timer_id].interval > 0) {
@@ -51,7 +48,6 @@ static void *SWITCH_THREAD_FUNC js_ivs_service_thread(switch_thread_t *thread, v
             }
         }
         switch_mutex_unlock(js_ivs->mutex_timers);
-
 
         switch_yield(10000);
     }

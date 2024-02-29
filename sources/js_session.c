@@ -1240,7 +1240,7 @@ static void js_session_finalizer(JSRuntime *rt, JSValue val) {
         fl_wloop = (jss->wlock > 0);
         switch_mutex_unlock(jss->mutex);
 
-        if(jss->wlock > 0) {
+        if(fl_wloop) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for unlock ('%d' locks) ...\n", jss->wlock);
             while(fl_wloop) {
                 switch_mutex_lock(jss->mutex);
