@@ -105,3 +105,6 @@ while(!script.isInterrupted()) {
     msleep(100);
 }
 
+if(ivs) {
+    ivs.destroy();
+}
