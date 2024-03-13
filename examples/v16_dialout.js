@@ -32,7 +32,7 @@ var helloDone = false;
 ivs.timerSetup(1, 3, 'once');
 
 while(!script.isInterrupted()) {
-    if(!session.isReady) { break; }
+    if(!ses.isReady) { break; }
 
     var ivsEvent = ivs.getEvent();
     if(ivsEvent) {
