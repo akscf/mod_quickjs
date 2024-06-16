@@ -5,10 +5,10 @@
 ## version 1.0
  A quite stable version with the basic features and partial compatibility with the old spidermonkey scripts.
  Links relevant for this version:
- - [Build and installation guide](http://akscf.org/files/mod_quickjs/installation_guide.pdf)
- - [Builitin functions](http://akscf.org/files/mod_quickjs/builtin_functions_v10.pdf)
- - [Builitin classes](http://akscf.org/files/mod_quickjs/builtin_classes_v10.pdf)
- - [Scripts examples](examples/)
+ - [Build and installation guide](https://github.com/akscf/mod_quickjs/blob/main/docs/installation_guide.pdf)
+ - [Functions](https://github.com/akscf/mod_quickjs/blob/main/docs/builtin_functions_v10.pdf)
+ - [Classes](https://github.com/akscf/mod_quickjs/blob/main/docs/builtin_classes_v10.pdf)
+ - [Examples](examples/)
 
 ## version 1.6
 This version focused on adding features to make interactive systems faster to develop.<br>
