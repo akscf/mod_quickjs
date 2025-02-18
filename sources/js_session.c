@@ -105,7 +105,9 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
     }
 
     SESSION_SANITY_CHECK();
-
+    channel = switch_core_session_get_channel(jss->session);
+    caller_profile = switch_channel_get_caller_profile(channel);
+           
     switch(magic) {
         case PROP_NAME: {
             return JS_NewString(ctx, switch_channel_get_name(channel));
