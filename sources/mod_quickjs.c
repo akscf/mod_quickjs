@@ -16,7 +16,6 @@
 #include "js_eventhandler.h"
 #include "js_session.h"
 #include "js_curl.h"
-#include "js_ivs.h"
 
 globals_t globals;
 
@@ -514,7 +513,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_eventhandler_class_register(ctx, global_obj);
     js_xml_class_register(ctx, global_obj);
     js_curl_class_register(ctx, global_obj);
-    js_ivs_class_register(ctx, global_obj);
 
 #ifdef JS_ODBC_ENABLE
     js_odbc_class_register(ctx, global_obj);
@@ -523,7 +521,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     script->fl_ready = false; // unset
 
     flags_obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, flags_obj, "odbcEnabled", JS_NewString(ctx, (fl_odbc_enable ? "true" : "false")));
+    JS_SetPropertyStr(ctx, flags_obj,  "odbcEnabled", JS_NewString(ctx, (fl_odbc_enable ? "true" : "false")));
     JS_SetPropertyStr(ctx, global_obj, "flags", flags_obj);
 
     runtime_obj = JS_NewObject(ctx);
