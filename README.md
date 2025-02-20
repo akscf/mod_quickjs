@@ -3,9 +3,9 @@
 </p>
 
 ## version 1.7
- - IVS class was removed <br>
  - added playAndDetectSpeech into Session class (see examples/v17_speechDetect.js)<br>
  - added sayAndDetectSpeech into Session class (see examples/v17_speechDetect.js)<br>
+ - IVS class was removed <br>
  - ... in develooping ...
     
 ## version 1.6
