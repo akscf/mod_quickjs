@@ -352,15 +352,15 @@ static JSValue js_eventhandler_contructor(JSContext *ctx, JSValueConst new_targe
     switch_queue_create(&js_eventhandler->event_queue, QUEUE_MAX_LEN, pool);
     switch_core_hash_init(&js_eventhandler->custom_events);
 
-    js_eventhandler->filters = NULL;
-    memset(&js_eventhandler->event_list, 0, sizeof(js_eventhandler->event_list));
-
     js_eventhandler = js_mallocz(ctx, sizeof(js_eventhandler_t));
     if(!js_eventhandler) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
         goto fail;
     }
+
     js_eventhandler->pool = pool;
+    js_eventhandler->filters = NULL;
+    memset(&js_eventhandler->event_list, 0, sizeof(js_eventhandler->event_list));
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
