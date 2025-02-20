@@ -30,6 +30,8 @@
 #define PROP_IS_MEDIA_READY                 16
 #define PROP_ENCODED_FRAME_SIZE             17
 #define PROP_DECODED_FRAME_SIZE             18
+#define PROP_TTS_ENGINE                     19
+#define PROP_ASR_ENGINE                     20
 
 
 #define SESSION_SANITY_CHECK() if (!jss || !jss->session) { \
@@ -105,13 +107,10 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
     }
 
     SESSION_SANITY_CHECK();
+
     channel = switch_core_session_get_channel(jss->session);
     caller_profile = switch_channel_get_caller_profile(channel);
-<<<<<<< HEAD
 
-=======
-           
->>>>>>> cd8cf00b00b52b90f348f666e889db55dd4a8135
     switch(magic) {
         case PROP_NAME: {
             return JS_NewString(ctx, switch_channel_get_name(channel));
@@ -178,15 +177,45 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
         case PROP_DECODED_FRAME_SIZE: {
             return JS_NewInt32(ctx, jss->decoded_frame_size);
         }
+        case PROP_TTS_ENGINE: {
+            const char *name = switch_channel_get_variable(channel, "tts_engine");
+            if(!zstr(name)) { return JS_NewString(ctx, name); }
+            return JS_UNDEFINED;
+        }
+        case PROP_ASR_ENGINE: {
+            const char *name = switch_channel_get_variable(channel, "asr_engine");
+            if(!zstr(name)) { return JS_NewString(ctx, name); }
+            return JS_UNDEFINED;
+        }
     }
+
     return JS_UNDEFINED;
 }
 
 static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-    const char *str = NULL;
+    switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
+
+    channel = switch_core_session_get_channel(jss->session);
+
+    switch(magic) {
+        case PROP_TTS_ENGINE: {
+            if(QJS_IS_NULL(val)) { return JS_FALSE; }
+            const char *str = JS_ToCString(ctx, val);
+            switch_channel_set_variable_var_check(channel, "tts_engine", str, false);
+            JS_FreeCString(ctx, str);
+            return JS_TRUE;
+        }
+        case PROP_ASR_ENGINE: {
+            if(QJS_IS_NULL(val)) { return JS_FALSE; }
+            const char *str = JS_ToCString(ctx, val);
+            switch_channel_set_variable_var_check(channel, "asr_engine", str, false);
+            JS_FreeCString(ctx, str);
+            return JS_TRUE;
+        }
+    }
 
     return JS_FALSE;
 }
@@ -225,9 +254,11 @@ static JSValue js_session_set_auto_hangup(JSContext *ctx, JSValueConst this_val,
     if(argc > 0) {
         jss->fl_hup_auto = JS_ToBool(ctx, argv[0]);
     }
+
     return JS_TRUE;
 }
 
+// (ttsEngine, ttsVoice, text, [dtmfCallback, udata])
 static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     const char *js_tts_name = NULL, *js_tts_voice = NULL;
@@ -414,6 +445,7 @@ static JSValue js_session_stream_file(JSContext *ctx, JSValueConst this_val, int
     return JS_TRUE;
 }
 
+// (min_digits, max_digits, max_tries ,timeout, terminators, audio_file, bad_audio_file, [digits_regex, var_name, digit_timeout, transfer_on_failure])
 static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     char buf[513] = { 0 };
@@ -474,69 +506,117 @@ static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_
     return result;
 }
 
+// (fileToPlay, [timeout, asrExtraParam])
 static JSValue js_session_play_and_detect_speech(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_status_t status = 0;
-    switch_input_args_t args = { 0 };
-    input_callback_state_t cb_state = { 0 };
-    uint32_t timeout = 0, len = 0;
-    void *bp = NULL;
+    uint32_t timeout = 0;
     char *stt_result = NULL;
+    char *asr_extra_params = NULL;
     const char *file_name = NULL;
-    const char *engine_name = NULL;
     const char *extra_params = NULL;
+    const char *asr_engine_name = NULL;
     JSValue result;
 
     SESSION_SANITY_CHECK();
 
-    if(argc < 2) {
-        return JS_ThrowTypeError(ctx, "playAndDetectSpeech(fileToPlay, asrEngine, [timeout, dtmfHook, hookUsrData, extraParams])");
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "playAndDetectSpeech(fileToPlay, [timeout, asrExtraParam])");
     }
 
-    if(QJS_IS_NULL(argv[0]) || QJS_IS_NULL(argv[1])) {
-        return JS_FALSE;
+    asr_engine_name = switch_channel_get_variable(switch_core_session_get_channel(jss->session), "asr_engine");
+    if(zstr(asr_engine_name)) {
+        return JS_ThrowTypeError(ctx, "Missing channel variable: asr_engine");
     }
 
     file_name = JS_ToCString(ctx, argv[0]);
-    engine_name = JS_ToCString(ctx, argv[1]);
 
+    if(argc > 1) {
+        JS_ToUint32(ctx, &timeout, argv[1]);
+    }
     if(argc > 2) {
-        JS_ToUint32(ctx, &timeout, argv[2]);
-    }
-    if(argc > 3) {
-        if(JS_IsFunction(ctx, argv[3])) {
-            memset(&cb_state, 0, sizeof(cb_state));
-            cb_state.jss = jss;
-            cb_state.arg = (argc > 3 ? argv[4] : JS_UNDEFINED);
-            cb_state.function = argv[3];
-
-            args.buf = &cb_state;
-            args.buflen = sizeof(cb_state);
-            args.input_callback = js_collect_input_callback;
-        }
-    }
-    if(argc > 5) {
-        extra_params = JS_ToCString(ctx, argv[5]);
+        extra_params = JS_ToCString(ctx, argv[2]);
     }
 
-    status = switch_ivr_play_and_detect_speech(jss->session, file_name, engine_name, extra_params ? extra_params : "{}", &stt_result, timeout, &args);
-    if(status != SWITCH_STATUS_SUCCESS) {
+    if(extra_params) {
+        asr_extra_params = switch_mprintf("{timeout=%d, %s}", timeout, extra_params);
+    } else {
+        asr_extra_params = switch_mprintf("{timeout=%d}", timeout);
+    }
+
+    status = switch_ivr_play_and_detect_speech(jss->session, file_name, asr_engine_name, asr_extra_params, &stt_result, timeout, NULL);
+    if(status == SWITCH_STATUS_SUCCESS || status == SWITCH_STATUS_FALSE) {
+        result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
+    } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech() failed (status=%i)\n", status);
     }
 
-    if(!zstr(stt_result)) {
-        result = JS_NewString(ctx, stt_result);
-    } else {
-        result = JS_FALSE;
-    }
-
     JS_FreeCString(ctx, file_name);
-    JS_FreeCString(ctx, engine_name);
     JS_FreeCString(ctx, extra_params);
+    switch_safe_free(asr_extra_params);
 
     return result;
 }
 
+// (textToSpeech, [timeout, asrExtraParam])
+static JSValue js_session_say_and_detect_speech(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    switch_status_t status = 0;
+    uint32_t timeout = 0;
+    char *stt_result = NULL;
+    char *stt_source = NULL;
+    char *asr_extra_params = NULL;
+    const char *text = NULL;
+    const char *extra_params = NULL;
+    const char *asr_engine_name = NULL;
+    JSValue result;
+
+    SESSION_SANITY_CHECK();
+
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "sayAndDetectSpeech(textToSpeech, [timeout, asrExtraParam])");
+    }
+
+    asr_engine_name = switch_channel_get_variable(switch_core_session_get_channel(jss->session), "asr_engine");
+    if(zstr(asr_engine_name)) {
+        return JS_ThrowTypeError(ctx, "Missing channel variable: asr_engine");
+    }
+    if(zstr(switch_channel_get_variable(switch_core_session_get_channel(jss->session), "tts_engine"))) {
+        return JS_ThrowTypeError(ctx, "Missing channel variable: tts_engine");
+    }
+
+    if(argc > 1) {
+        JS_ToUint32(ctx, &timeout, argv[1]);
+    }
+    if(argc > 2) {
+        extra_params = JS_ToCString(ctx, argv[2]);
+    }
+
+    text = JS_ToCString(ctx, argv[0]);
+    stt_source = switch_mprintf("say:%s", text);
+
+    if(extra_params) {
+        asr_extra_params = switch_mprintf("{timeout=%d, %s}", timeout, extra_params);
+    } else {
+        asr_extra_params = switch_mprintf("{timeout=%d}", timeout);
+    }
+
+    status = switch_ivr_play_and_detect_speech(jss->session, stt_source, asr_engine_name, asr_extra_params, &stt_result, timeout, NULL);
+    if(status == SWITCH_STATUS_SUCCESS || status == SWITCH_STATUS_FALSE) {
+        result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech() failed (status=%i)\n", status);
+    }
+
+    JS_FreeCString(ctx, text);
+    JS_FreeCString(ctx, extra_params);
+    switch_safe_free(asr_extra_params);
+    switch_safe_free(stt_source);
+
+    return result;
+}
+
+// (file[, dtmfCallback, udata, limit])
 static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     switch_channel_t *channel = NULL;
@@ -823,6 +903,7 @@ static JSValue js_session_get_event(JSContext *ctx, JSValueConst this_val, int a
     return JS_UNDEFINED;
 }
 
+// (jsEvent)
 static JSValue js_session_send_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
 
@@ -831,14 +912,12 @@ static JSValue js_session_send_event(JSContext *ctx, JSValueConst this_val, int 
     if(argc > 0) {
         if(JS_IsObject(argv[0])) {
             js_event_t *js_event = JS_GetOpaque2(ctx, argv[0], js_event_get_classid(ctx));
-
             if(!js_event && !js_event->event) {
                 return JS_FALSE;
             }
             if(switch_core_session_receive_event(jss->session, &js_event->event) != SWITCH_STATUS_SUCCESS) {
                 return JS_FALSE;
             }
-            //js_event->event = NULL
         }
     }
 
@@ -1264,6 +1343,8 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("isMediaReady", js_session_property_get, js_session_property_set, PROP_IS_MEDIA_READY),
     JS_CGETSET_MAGIC_DEF("encodedFrameSize", js_session_property_get, js_session_property_set, PROP_ENCODED_FRAME_SIZE),
     JS_CGETSET_MAGIC_DEF("decodedFrameSize", js_session_property_get, js_session_property_set, PROP_DECODED_FRAME_SIZE),
+    JS_CGETSET_MAGIC_DEF("ttsEngine", js_session_property_get, js_session_property_set, PROP_TTS_ENGINE),
+    JS_CGETSET_MAGIC_DEF("asrEngine", js_session_property_get, js_session_property_set, PROP_ASR_ENGINE),
     //
     JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),
     JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),
@@ -1272,6 +1353,7 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("streamFile", 1, js_session_stream_file),
     JS_CFUNC_DEF("playAndGetDigits", 1, js_session_play_and_get_digits),
     JS_CFUNC_DEF("playAndDetectSpeech", 1, js_session_play_and_detect_speech),
+    JS_CFUNC_DEF("sayAndDetectSpeech", 1, js_session_say_and_detect_speech),
     JS_CFUNC_DEF("recordFile", 1, js_session_record_file),
     JS_CFUNC_DEF("collectInput", 1, js_session_collect_input),
     JS_CFUNC_DEF("flushEvents", 1, js_session_flush_events),
@@ -1369,7 +1451,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
         jss->fl_hup_auto = true;
 
         if(!jss->session) {
-            error = JS_ThrowTypeError(ctx, "Couldn't create a new session (not found)");
+            error = JS_ThrowTypeError(ctx, "Unable to create a new session (not found)");
             has_error = true; goto fail;
         }
     } else {
@@ -1406,7 +1488,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     }
 
     if(!jss->session) {
-        error = JS_ThrowTypeError(ctx, "Couldn't create a new session");
+        error = JS_ThrowTypeError(ctx, "Unable to create a new session");
         has_error = true;
         goto fail;
     }
