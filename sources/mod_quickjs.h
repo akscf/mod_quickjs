@@ -19,12 +19,13 @@
  #define false SWITCH_FALSE
 #endif
 
-#define QJS_IS_NULL(jsV)  (JS_IsNull(jsV) || JS_IsUndefined(jsV) || JS_IsUninitialized(jsV))
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-#define BASE64_ENC_SZ(n) (4*(n+2/3))
-#define BASE64_DEC_SZ(n) ((n*3)/4)
-#define JID_NONE        0x0
-#define MOD_VERSION     "1.7"
+#define QJS_IS_NULL(jsV)    (JS_IsNull(jsV) || JS_IsUndefined(jsV) || JS_IsUninitialized(jsV))
+#define ARRAY_SIZE(a)       (sizeof(a) / sizeof((a)[0]))
+#define JID_NONE            0x0
+
+#define MOD_VERSION         "1.7.3"
+#define MOD_QUICKJS_DEBUG
+
 
 typedef struct {
     switch_mutex_t          *mutex;
@@ -78,6 +79,5 @@ uint32_t script_sem_take(script_t *script);
 void script_sem_release(script_t *script);
 void script_wait_unlock(script_t *script);
 script_t *script_lookup(char *id);
-
 
 #endif

@@ -306,8 +306,6 @@ static void js_eventhandler_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-eventhandler-finalizer: js_eventhandler=%p\n", js_eventhandler);
-
     if(js_eventhandler->custom_events) {
         switch_core_hash_destroy(&js_eventhandler->custom_events);
     }
@@ -333,6 +331,10 @@ static void js_eventhandler_finalizer(JSRuntime *rt, JSValue val) {
         pool = NULL;
     }
 
+#ifdef MOD_QUICKJS_DEBUG
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-eventhandler-finalizer: js_eventhandler=%p\n", js_eventhandler);
+#endif
+
     js_free_rt(rt, js_eventhandler);
 }
 
@@ -344,7 +346,7 @@ static JSValue js_eventhandler_contructor(JSContext *ctx, JSValueConst new_targe
     switch_memory_pool_t *pool = NULL;
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
         goto fail;
     }
 
@@ -354,7 +356,7 @@ static JSValue js_eventhandler_contructor(JSContext *ctx, JSValueConst new_targe
 
     js_eventhandler = js_mallocz(ctx, sizeof(js_eventhandler_t));
     if(!js_eventhandler) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         goto fail;
     }
 
@@ -371,7 +373,9 @@ static JSValue js_eventhandler_contructor(JSContext *ctx, JSValueConst new_targe
 
     JS_SetOpaque(obj, js_eventhandler);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-eventhandler-constructor: js_eventhandler=%p\n", js_eventhandler);
+#endif
 
     return obj;
 fail:

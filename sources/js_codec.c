@@ -210,7 +210,9 @@ static void js_codec_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-codec-finalizer: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
+#endif
 
     if(js_codec->codec && js_codec->fl_can_destroy) {
         switch_core_codec_destroy(js_codec->codec);
@@ -272,12 +274,12 @@ static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int 
 
     js_codec = js_mallocz(ctx, sizeof(js_codec_t));
     if(!js_codec) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         return JS_EXCEPTION;
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
         goto fail;
     }
 
@@ -307,7 +309,9 @@ static JSValue js_codec_contructor(JSContext *ctx, JSValueConst new_target, int 
     JS_SetOpaque(obj, js_codec);
     JS_FreeCString(ctx, name);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-codec-constructor: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
+#endif
 
     return obj;
 
@@ -373,7 +377,7 @@ JSValue js_codec_from_session_wcodec(JSContext *ctx, switch_core_session_t *sess
 
     js_codec = js_mallocz(ctx, sizeof(js_codec_t));
     if(!js_codec) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         return JS_EXCEPTION;
     }
 
@@ -406,7 +410,9 @@ JSValue js_codec_from_session_wcodec(JSContext *ctx, switch_core_session_t *sess
 
     JS_SetOpaque(obj, js_codec);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-wcodec-from-session: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
+#endif
 
     return obj;
 }
@@ -420,7 +426,7 @@ JSValue js_codec_from_session_rcodec(JSContext *ctx, switch_core_session_t *sess
 
     js_codec = js_mallocz(ctx, sizeof(js_codec_t));
     if(!js_codec) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         return JS_EXCEPTION;
     }
 
@@ -453,7 +459,9 @@ JSValue js_codec_from_session_rcodec(JSContext *ctx, switch_core_session_t *sess
 
     JS_SetOpaque(obj, js_codec);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-rcodec-from-session: js_codec=%p, codec=%p\n", js_codec, js_codec->codec);
+#endif
 
     return obj;
 }

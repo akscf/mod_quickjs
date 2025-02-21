@@ -5,19 +5,12 @@ function hangup_hook(state) {
     HANGUP = true;
 }
 
-function input_callback(session, event, type, udata) {
-    console_log('notice', "INPUT-CALLBACK: type: [" + type + "], user_data: [" + udata + "]");
+function input_callback(session, digit, udata) {
 
-    if(session) {
-        console_log('notice', "INPUT-CALLBACK: session.uuid: [" + session.uuid + "]");
-    }
+    console_log('notice', "INPUT-CALLBACK: digit=[" + digit + "], user_data=[" + udata + "]");
 
-    if(type == 'dtmf') {
-        console_log('notice', "INPUT-CALLBACK: dtmf: [" + event.digit + "]");
-
-        if(event.digit == '#') {
-            return false;
-        }
+    if(digit == '#') {
+	return false;
     }
 
     return true;

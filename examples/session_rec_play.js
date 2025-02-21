@@ -5,35 +5,33 @@ function hangup_hook(state) {
     HANGUP = true;
 }
 
-function playback_callback(filehandle, event, type, udata) {
-    console_log('notice', "PLAYBACK-CALLBACK: type: [" + type + "], user_data: [" + udata + "]");
+function playback_callback(filehandle, digit, udata) {
+
+    console_log('notice', "PLAYBACK-CALLBACK: digit=[" + digit + "], user_data=[" + udata + "]");
 
     if(!filehandle) {
         console_log('error', "PLAYBACK-CALLBACK: filehandle == NULL");
         return;
     }
 
-    if(type == 'dtmf') {
-        console_log('notice', "PLAYBACK-CALLBACK: dtmf: [" + event.digit + "]");
-
-        if(event.digit == '1') {
-            filehandle.volume = '+1';
-        } else if(event.digit == '2') {
-            filehandle.volume = '-1';
-        } else if(event.digit == '3') {
-            filehandle.volume = 0;
-        } else if(event.digit == '4') {
-            filehandle.speed = '+1';
-        } else if(event.digit == '5') {
-            filehandle.speed = '-1';
-        } else if(event.digit == '6') {
-            filehandle.speed = 0;
-        } else if(event.digit == '*') {
-            filehandle.pause();
-        } else if(event.digit == '#') {
-            return false;
-        }
+    if(digit == '1') {
+        filehandle.volume = '+1';
+    } else if(digit == '2') {
+        filehandle.volume = '-1';
+    } else if(digit == '3') {
+        filehandle.volume = 0;
+    } else if(digit == '4') {
+        filehandle.speed = '+1';
+    } else if(digit == '5') {
+        filehandle.speed = '-1';
+    } else if(digit == '6') {
+        filehandle.speed = 0;
+    } else if(digit == '*') {
+        filehandle.pause();
+    } else if(digit == '#') {
+        return false;
     }
+    
     return true;
 }
 

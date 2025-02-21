@@ -4,7 +4,6 @@
  **/
 #include "mod_quickjs.h"
 #include "js_xml.h"
-#include "js_dtmf.h"
 #include "js_odbc.h"
 #include "js_coredb.h"
 #include "js_codec.h"
@@ -506,7 +505,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_codec_class_register(ctx, global_obj);
     js_file_handle_class_register(ctx, global_obj);
     js_event_class_register(ctx, global_obj);
-    js_dtmf_class_register(ctx, global_obj);
     js_file_class_register(ctx, global_obj);
     js_socket_class_register(ctx, global_obj);
     js_coredb_class_register(ctx, global_obj);

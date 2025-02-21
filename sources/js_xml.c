@@ -288,7 +288,9 @@ static void js_xml_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-xml-finalizer: js_xml=%p, xml=%p, fl_free_xml=%i\n", js_xml, js_xml->xml, js_xml->fl_free_xml);
+#endif
 
     if(js_xml->fl_free_xml) {
         if(js_xml->xml) {
@@ -325,7 +327,7 @@ static JSValue js_xml_contructor(JSContext *ctx, JSValueConst new_target, int ar
 
     js_xml = js_mallocz(ctx, sizeof(js_xml_t));
     if(!js_xml) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         goto fail;
     }
 
@@ -342,7 +344,9 @@ static JSValue js_xml_contructor(JSContext *ctx, JSValueConst new_target, int ar
     JS_SetOpaque(obj, js_xml);
     JS_FreeCString(ctx, data);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-xml-constructor: js-xml=%p, xml=%p\n", js_xml, js_xml->xml);
+#endif
 
     return obj;
 
@@ -361,7 +365,7 @@ static JSValue js_xml_object_create(JSContext *ctx, switch_xml_t xml) {
 
     js_xml = js_mallocz(ctx, sizeof(js_xml_t));
     if(!js_xml) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         return JS_EXCEPTION;
     }
 
@@ -379,7 +383,9 @@ static JSValue js_xml_object_create(JSContext *ctx, switch_xml_t xml) {
 
     JS_SetOpaque(obj, js_xml);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-xml-obj-created: js_xml=%p, xml=%p\n", js_xml, js_xml->xml);
+#endif
 
     return obj;
 }

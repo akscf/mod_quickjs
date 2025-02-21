@@ -604,7 +604,9 @@ static void js_curl_finalizer(JSRuntime *rt, JSValue val) {
     switch_mutex_unlock(js_curl->mutex);
 
     if(fl_wloop) {
+#ifdef MOD_QUICKJS_DEBUG
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Waiting for termination of '%d' jobs...\n", js_curl->active_jobs);
+#endif
         while(fl_wloop) {
             switch_mutex_lock(js_curl->mutex);
             fl_wloop = (js_curl->active_jobs != 0);
@@ -617,7 +619,10 @@ static void js_curl_finalizer(JSRuntime *rt, JSValue val) {
         switch_core_destroy_memory_pool(&pool);
     }
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-curl-finalizer: js_curl=%p (destroyed)\n", js_curl);
+#endif
+
     js_free_rt(rt, js_curl);
 }
 
@@ -663,13 +668,13 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
         goto fail;
     }
 
     js_curl = js_mallocz(ctx, sizeof(js_curl_t));
     if(!js_curl) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         goto fail;
     }
 
@@ -683,7 +688,7 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
 
     switch_queue_create(&js_curl->events, CURL_QUEUE_SIZE, pool);
     if(switch_mutex_init(&js_curl->mutex, SWITCH_MUTEX_NESTED, pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_mutex_init()\n");
         goto fail;
     }
 
@@ -701,7 +706,9 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
     JS_FreeCString(ctx, credentials);
     JS_FreeCString(ctx, content_type);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-curl-constructor: js_curl=%p\n", js_curl);
+#endif
 
     return obj;
 fail:

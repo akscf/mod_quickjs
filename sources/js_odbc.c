@@ -262,7 +262,9 @@ static void js_odbc_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-odbc-finalizer: js_odbc=%p, db=%p\n", js_odbc, js_odbc->db);
+#endif
 
     if(js_odbc->stmt) {
         SQLFreeHandle(SQL_HANDLE_STMT, js_odbc->stmt);
@@ -308,19 +310,19 @@ static JSValue js_odbc_contructor(JSContext *ctx, JSValueConst new_target, int a
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
         goto fail;
     }
 
     db = switch_odbc_handle_new(dsn, username, password);
     if(!db) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Couldn't init odbc\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_odbc_handle_new()\n");
         goto fail;
     }
 
     js_odbc = js_mallocz(ctx, sizeof(js_odbc));
     if(!js_odbc) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         goto fail;
     }
 
@@ -345,7 +347,9 @@ static JSValue js_odbc_contructor(JSContext *ctx, JSValueConst new_target, int a
     JS_FreeCString(ctx, username);
     JS_FreeCString(ctx, password);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-odbc-constructor: js-odbc=%p, db=%p\n", js_odbc, js_odbc->db);
+#endif
 
     return obj;
 

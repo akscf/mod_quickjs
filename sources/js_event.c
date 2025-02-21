@@ -203,7 +203,9 @@ static void js_event_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-event-finalizer: js_event=%p, event=%p\n", js_event, js_event->event);
+#endif
 
     if(js_event->event) {
         switch_event_destroy(&js_event->event);
@@ -221,7 +223,7 @@ static JSValue js_event_contructor(JSContext *ctx, JSValueConst new_target, int 
 
     js_event = js_mallocz(ctx, sizeof(js_event_t));
     if(!js_event) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         return JS_EXCEPTION;
     }
 
@@ -267,7 +269,9 @@ static JSValue js_event_contructor(JSContext *ctx, JSValueConst new_target, int 
     js_event->event = event;
     JS_SetOpaque(obj, js_event);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-event-constructor: js-event=%p, event=%p\n", js_event, js_event->event);
+#endif
 
     return obj;
 fail:
@@ -320,7 +324,7 @@ JSValue js_event_object_create(JSContext *ctx, switch_event_t *event) {
 
     js_event = js_mallocz(ctx, sizeof(js_event_t));
     if(!js_event) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         return JS_EXCEPTION;
     }
 
@@ -336,7 +340,9 @@ JSValue js_event_object_create(JSContext *ctx, switch_event_t *event) {
     js_event->event = event;
     JS_SetOpaque(obj, js_event);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-event-obj-created: js_event=%p\n", js_event);
+#endif
 
     return obj;
 }

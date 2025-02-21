@@ -26,6 +26,7 @@ typedef struct {
     uint32_t                ptime;
     uint32_t                encoded_frame_size;    // bytes
     uint32_t                decoded_frame_size;    // bytes
+    uint32_t                bg_streams;
 } js_session_t;
 
 /* js_session.c */
@@ -38,6 +39,12 @@ JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, J
 uint32_t js_session_take(js_session_t *session);
 void js_session_release(js_session_t *session);
 
+/* js_session_asr.c */
+SWITCH_DECLARE(switch_status_t) switch_ivr_play_and_detect_speech_ex(switch_core_session_t *session, const char *file, const char *mod_name, const char *grammar, char **result, uint32_t input_timeout, switch_input_args_t *args);
+
+/* js_session_bgs.c */
+switch_status_t js_session_bgs_stream_start(js_session_t *js_session, const char *path);
+switch_status_t js_session_bgs_stream_stop(js_session_t *js_session);
 
 #endif
 

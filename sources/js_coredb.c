@@ -349,7 +349,9 @@ static void js_coredb_finalizer(JSRuntime *rt, JSValue val) {
         return;
     }
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-coredb-finalizer: js_coredb=%p, db=%p\n", js_coredb, js_coredb->db);
+#endif
 
     if(js_coredb->stmt) {
         switch_core_db_finalize(js_coredb->stmt);
@@ -389,7 +391,7 @@ static JSValue js_coredb_contructor(JSContext *ctx, JSValueConst new_target, int
     dbname = JS_ToCString(ctx, argv[0]);
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
         goto fail;
     }
 
@@ -401,7 +403,7 @@ static JSValue js_coredb_contructor(JSContext *ctx, JSValueConst new_target, int
 
     js_coredb = js_mallocz(ctx, sizeof(js_coredb_t));
     if(!js_coredb) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_mallocz()\n");
         goto fail;
     }
     js_coredb->db = db;
@@ -418,7 +420,9 @@ static JSValue js_coredb_contructor(JSContext *ctx, JSValueConst new_target, int
     JS_SetOpaque(obj, js_coredb);
     JS_FreeCString(ctx, dbname);
 
+#ifdef MOD_QUICKJS_DEBUG
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "js-coredb-constructor: js-coredb=%p, db=%p\n", js_coredb, js_coredb->db);
+#endif
 
     return obj;
 fail:

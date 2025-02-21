@@ -1,10 +1,13 @@
 <p>
-    An alternative javascript modules for the Freeswitch based on <a href="https://bellard.org/quickjs/">quickjs</a>. <br>
+    An alternative javascript module for the Freeswitch based on <a href="https://bellard.org/quickjs/">quickjs</a>. <br>
 </p>
 
 ## version 1.7
- - added playAndDetectSpeech into Session class (see examples/v17_speechDetect.js)<br>
- - added sayAndDetectSpeech into Session class (see examples/v17_speechDetect.js)<br>
+ - added playAndDetectSpeech,sayAndDetectSpeech (Session) (see examples/v17_speechDetect.js)<br>
+ - added detectSpeech (Session)<br>
+ - added speakEx and modified speak function (Session) <br>
+ - added bgStreamStart, bgStreamStop for MOH (Session)
+ - changed arguments sequences in: streamFile, recordFile (Session)
  - IVS class was removed <br>
  - ... in develooping ...
     
