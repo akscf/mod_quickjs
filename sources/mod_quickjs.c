@@ -59,6 +59,7 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst this_val, int argc, J
     return JS_UNDEFINED;
 }
 
+// mssleep(delayMsec)
 static JSValue js_msleep(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     uint32_t msec = 0;
 
@@ -75,6 +76,7 @@ static JSValue js_msleep(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     return JS_TRUE;
 }
 
+// setValiable(name, value)
 static JSValue js_global_set(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     const char *var_str = NULL;
     const char *val_str = NULL;
@@ -82,7 +84,6 @@ static JSValue js_global_set(JSContext *ctx, JSValueConst this_val, int argc, JS
     if(argc < 2) {
         return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
-
     if(QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: varName");
     }
@@ -98,15 +99,12 @@ static JSValue js_global_set(JSContext *ctx, JSValueConst this_val, int argc, JS
     return JS_TRUE;
 }
 
+// getValiable(name)
 static JSValue js_global_get(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     const char *var_str;
     char *val = NULL;
 
-    if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Not enough arguments");
-    }
-
-    if(QJS_IS_NULL(argv[0])) {
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: varName");
     }
 
@@ -172,21 +170,17 @@ static JSValue js_api_execute(JSContext *ctx, JSValueConst this_val, int argc, J
     switch_stream_handle_t stream = { 0 };
     JSValue js_ret_val;
 
-    if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    script = JS_GetContextOpaque(ctx);
+    if(!script) {
+        return JS_ThrowTypeError(ctx, "Malformed ctx");
     }
 
-    if(QJS_IS_NULL(argv[0])) {
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: api");
     }
 
     api_str = JS_ToCString(ctx, argv[0]);
     arg_str = (argc > 1 && !QJS_IS_NULL(argv[1]) ? JS_ToCString(ctx, argv[1]) : NULL);
-
-    script = JS_GetContextOpaque(ctx);
-    if(!script) {
-        return JS_ThrowTypeError(ctx, "Malformed ctx");
-    }
 
     SWITCH_STANDARD_STREAM(stream);
     switch_api_execute(api_str, arg_str, script->session, &stream);
@@ -203,11 +197,7 @@ static JSValue js_md5(JSContext *ctx, JSValueConst this_val, int argc, JSValueCo
     char digest[SWITCH_MD5_DIGEST_STRING_SIZE] = { 0 };
     const char *str = NULL;
 
-    if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Not enough arguments");
-    }
-
-    if(QJS_IS_NULL(argv[0])) {
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
         return JS_UNDEFINED;
     }
 
@@ -240,16 +230,12 @@ static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     char *path_local = NULL;
     char *buf = NULL;
 
-    if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Not enough arguments");
-    }
-
     script = JS_GetContextOpaque(ctx);
     if(!script) {
         return JS_ThrowTypeError(ctx, "Malformed ctx");
     }
 
-    if(QJS_IS_NULL(argv[0])) {
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "Invalid argument: filename");
     }
 
@@ -260,28 +246,28 @@ static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     } else {
         path_local = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.script_dir, SWITCH_PATH_SEPARATOR, path);
         if(switch_file_exists(path_local, NULL) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "File not found: %s\n", path_local);
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "File not found (%s)\n", path_local);
             goto out;
         }
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
         goto out;
     }
 
     if(switch_file_open(&fd, path_local, SWITCH_FOPEN_READ, SWITCH_FPROT_UREAD, pool) != SWITCH_STATUS_SUCCESS) {
-        ret_val = JS_ThrowTypeError(ctx, "Couldn't open file: %s\n", path_local);
+        ret_val = JS_ThrowTypeError(ctx, "Unable to open file: %s\n", path_local);
         goto out;
     }
 
     if((flen = switch_file_get_size(fd)) > 0) {
         if((buf = switch_core_alloc(pool, flen)) == NULL) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_alloc()\n");
             goto out;
         }
         if(switch_file_read(fd, buf, &flen) != SWITCH_STATUS_SUCCESS) {
-            ret_val = JS_ThrowTypeError(ctx, "Couldn't read file\n");
+            ret_val = JS_ThrowTypeError(ctx, "Unable to read file\n");
             goto out;
         }
 
@@ -294,6 +280,7 @@ static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSVal
         JS_FreeValue(ctx, ret_val);
         ret_val = JS_TRUE;
     }
+
 out:
     if(fd) {
         switch_file_close(fd);
@@ -339,6 +326,50 @@ static JSValue js_unlink(JSContext *ctx, JSValueConst this_val, int argc, JSValu
     return JS_TRUE;
 }
 
+static JSValue js_get_path(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
+    const char *type = NULL;
+    JSValue ret_val = JS_UNDEFINED;
+
+    if(!script) {
+        return JS_UNDEFINED;
+    }
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "getPath(tmp|cache|scripts|sounds)");
+    }
+
+    type = JS_ToCString(ctx, argv[0]);
+
+    if(!strcasecmp(type, "tmp")) {
+        ret_val = JS_NewString(ctx, SWITCH_GLOBAL_dirs.temp_dir);
+    } else if(!strcasecmp(type, "cache")) {
+        ret_val = JS_NewString(ctx, SWITCH_GLOBAL_dirs.cache_dir);
+    } else if(!strcasecmp(type, "scripts")) {
+        ret_val = JS_NewString(ctx, SWITCH_GLOBAL_dirs.script_dir);
+    } else if(!strcasecmp(type, "sounds")) {
+        ret_val = JS_NewString(ctx, SWITCH_GLOBAL_dirs.sounds_dir);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unsupported type (%s)\n", type);
+    }
+
+    JS_FreeCString(ctx, type);
+
+    return ret_val;
+}
+
+static JSValue js_get_uuid(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
+    char tmp_uuid[SWITCH_UUID_FORMATTED_LENGTH + 1] = { 0 };
+
+    if(!script) {
+        return JS_UNDEFINED;
+    }
+
+    switch_uuid_str((char *)tmp_uuid, sizeof(tmp_uuid));
+    return JS_NewString(ctx, (char *)tmp_uuid);
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 static switch_status_t script_load(script_t *script) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -355,12 +386,12 @@ static switch_status_t script_load(script_t *script) {
 
     script->script_len = switch_file_get_size(fd);
     if(!script->script_len) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Script file is empty: %s\n", script->path);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Script file is empty (%s)\n", script->path);
         switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
 
     if((script->script_buf = switch_core_alloc(script->pool, script->script_len + 1)) == NULL)  {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_alloc()\n");
         switch_goto_status(SWITCH_STATUS_MEMERR, out);
     }
 
@@ -433,7 +464,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
 
     status = script_load(script);
     if(status != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't load script\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unable to load script\n");
         goto out;
     }
 
@@ -474,11 +505,11 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     }
 
     if(!(rt = JS_NewRuntime())) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create jsRuntime\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unable to create runtime (jsRuntime)\n");
         goto out;
     }
     if(!(ctx = JS_NewContext(rt))) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create jsCtx\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unable to create context (jsCtx)\n");
         goto out;
     }
 
@@ -569,6 +600,8 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
     JS_SetPropertyStr(ctx, global_obj, "setGlobalVariable", JS_NewCFunction(ctx, js_global_set, "setGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
+    JS_SetPropertyStr(ctx, global_obj, "getPath", JS_NewCFunction(ctx, js_get_path, "getPath", 1));
+    JS_SetPropertyStr(ctx, global_obj, "getUUID", JS_NewCFunction(ctx, js_get_uuid, "getUUID", 1));
 
     // add session obj
     if(script->session) {
@@ -576,7 +609,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 
         session_obj = js_session_object_create(ctx, script->session);
         if(JS_IsException(session_obj)) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't create a session object\n");
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unable to create session object\n");
             goto out;
         }
 
@@ -625,10 +658,6 @@ out:
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
-static void event_handler_shutdown(switch_event_t *event) {
-    globals.fl_shutdown = true;
-}
-
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
     "run   scriptName [args] - launch the script instance\n" \
@@ -727,7 +756,7 @@ SWITCH_STANDARD_APP(quickjs_app) {
     script_args = (argc > 1 ? ((char *)data + (strlen(argv[0]) + 1)) : NULL);
 
     if((status = script_launch(session, script_name, script_args, NULL, false)) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't launch: %s\n", script_name);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unable to launch script (%s)\n", script_name);
     }
     goto out;
 usage:
@@ -756,7 +785,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
 
     /* xml config */
     if((xml = switch_xml_open_cfg(CONFIG_NAME, &cfg, NULL)) == NULL) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't open: %s\n", CONFIG_NAME);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unable to open config (%s)\n", CONFIG_NAME);
         switch_goto_status(SWITCH_STATUS_GENERR, done);
     }
     if((xml_settings = switch_xml_child(cfg, "settings"))) {
@@ -781,23 +810,18 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
 
             if(!zstr(path)) {
                 if(script_launch(NULL, path, args, NULL, true) != SWITCH_STATUS_SUCCESS) {
-                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Failed to launch script: %s", path);
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unable to launch script (%s)", path);
                 }
             }
         }
     }
 
     *module_interface = switch_loadable_module_create_module_interface(pool, modname);
-    SWITCH_ADD_API(cmd_interface, "qjs", "manage quickjs scripts", quickjs_cmd, CMD_SYNTAX);
-    SWITCH_ADD_APP(app_interface, "qjs", "manage quickjs scripts", "manage quickjs scripts", quickjs_app, APP_SYNTAX, SAF_NONE);
-
-    if (switch_event_bind(modname, SWITCH_EVENT_SHUTDOWN, SWITCH_EVENT_SUBCLASS_ANY, event_handler_shutdown, NULL) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't bind event handler!\n");
-        switch_goto_status(SWITCH_STATUS_GENERR, done);
-    }
+    SWITCH_ADD_API(cmd_interface, "qjs", "quickjs scripts", quickjs_cmd, CMD_SYNTAX);
+    SWITCH_ADD_APP(app_interface, "qjs", "quickjs scripts", "quickjs scripts", quickjs_app, APP_SYNTAX, SAF_NONE);
 
     globals.fl_shutdown = false;
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "quckjs (version-%s)\n", MOD_VERSION);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_quckjs (%s)\n", MOD_VERSION);
 
 done:
     if(xml) {
@@ -811,8 +835,6 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_quickjs_shutdown) {
     script_t *script = NULL;
     uint8_t fl_wloop = true;
     void *hval = NULL;
-
-    switch_event_unbind_callback(event_handler_shutdown);
 
     globals.fl_shutdown = true;
 

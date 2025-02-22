@@ -12,6 +12,7 @@ typedef struct {
     switch_core_session_t   *session;
     JSContext               *ctx;
     switch_mutex_t          *mutex;
+    switch_file_handle_t    *bg_stream_fh;
     JSValue                 on_hangup;
     switch_call_cause_t     originate_fail_code;
     uint8_t                 fl_originate_fail_result;

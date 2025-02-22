@@ -226,6 +226,7 @@ static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JS
             if(QJS_IS_NULL(val)) { return JS_FALSE; }
             const char *str = JS_ToCString(ctx, val);
             switch_channel_set_variable_var_check(channel, "language", str, false);
+            switch_channel_set_variable_var_check(channel, "tts_voice", str, false); // for say via switch_ivr_play_file
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
@@ -512,6 +513,34 @@ static JSValue js_session_bg_stream_start(JSContext *ctx, JSValueConst this_val,
     return result;
 }
 
+// bgStreamCtl(pause|resume)
+static JSValue js_session_bg_stream_ctl(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    const char *action = NULL;
+    JSValue result = JS_FALSE;
+
+    SESSION_SANITY_CHECK();
+
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "bgStreamCtl(pause|resume)");
+    }
+
+    action = JS_ToCString(ctx, argv[0]);
+
+    if(!strcasecmp(action, "pause")) {
+        switch_mutex_lock(jss->mutex);
+        if(jss->bg_stream_fh) switch_set_flag(jss->bg_stream_fh, SWITCH_FILE_PAUSE);
+        switch_mutex_unlock(jss->mutex);
+    } else if(!strcasecmp(action, "resume")) {
+        switch_mutex_lock(jss->mutex);
+        if(jss->bg_stream_fh) switch_clear_flag(jss->bg_stream_fh, SWITCH_FILE_PAUSE);
+        switch_mutex_unlock(jss->mutex);
+    }
+
+    JS_FreeCString(ctx, action);
+    return result;
+}
+
 // bgStreamStop()
 static JSValue js_session_bg_stream_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
@@ -653,6 +682,78 @@ static JSValue js_session_play_and_detect_speech(JSContext *ctx, JSValueConst th
     return result;
 }
 
+// playAndDetectSpeechEx(fileToPlay, asrEngine, [timeoutSec, asrExtraParam, dtmfHandler, udata])
+static JSValue js_session_play_and_detect_speech_ex(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    input_callback_state_t cb_state = { 0 };
+    switch_input_args_t args = { 0 };
+    switch_status_t status = 0;
+    uint32_t timeout = 0;
+    char *stt_result = NULL;
+    char *asr_extra_params = NULL;
+    const char *file_name = NULL;
+    const char *extra_params = NULL;
+    const char *asr_engine_name = NULL;
+    const char *ch_asr_engine_name = NULL;
+    JSValue result = JS_UNDEFINED;
+
+    SESSION_SANITY_CHECK();
+
+    if(argc < 2 || QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "playAndDetectSpeechEx(fileToPlay, asrEngine, [timeoutSec, asrExtraParam, dtmfHandler, udata])");
+    }
+
+    file_name = JS_ToCString(ctx, argv[0]);
+    if(!QJS_IS_NULL(argv[1])) {
+        asr_engine_name = JS_ToCString(ctx, argv[1]);
+    } else {
+        ch_asr_engine_name = switch_channel_get_variable(switch_core_session_get_channel(jss->session), "asr_engine");
+    }
+
+    if(zstr(asr_engine_name) && zstr(ch_asr_engine_name) ) {
+        return JS_ThrowTypeError(ctx, "Missing argument: asrEngine");
+    }
+
+    if(argc > 2) {
+        JS_ToUint32(ctx, &timeout, argv[2]);
+    }
+    if(argc > 3) {
+        extra_params = JS_ToCString(ctx, argv[3]);
+    }
+    if(argc > 4 && JS_IsFunction(ctx, argv[4])) {
+        memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss = jss;
+        cb_state.arg = (argc > 5 ? argv[5] : JS_UNDEFINED);
+        cb_state.function = argv[4];
+
+        args.input_callback = xxx_collect_input_callback;
+        args.buf = &cb_state;
+        args.buflen = sizeof(cb_state);
+    }
+
+    if(extra_params) {
+        asr_extra_params = switch_mprintf("{timeout=%d, %s}", timeout, extra_params);
+    } else {
+        asr_extra_params = switch_mprintf("{timeout=%d}", timeout);
+    }
+
+    switch_channel_flush_dtmf(switch_core_session_get_channel(jss->session));
+    status = switch_ivr_play_and_detect_speech_ex(jss->session, file_name, asr_engine_name ? asr_engine_name : ch_asr_engine_name, asr_extra_params, &stt_result, timeout, &args);
+
+    if(status == SWITCH_STATUS_SUCCESS || status == SWITCH_STATUS_FALSE) {
+        result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech_ex() failed (status=%i)\n", status);
+    }
+
+    JS_FreeCString(ctx, file_name);
+    JS_FreeCString(ctx, asr_engine_name);
+    JS_FreeCString(ctx, extra_params);
+    switch_safe_free(asr_extra_params);
+
+    return result;
+}
+
 // sayAndDetectSpeech(textToSpeech, [timeoutSec, asrExtraParam, dtmfHandler, udata])
 static JSValue js_session_say_and_detect_speech(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
@@ -725,6 +826,82 @@ static JSValue js_session_say_and_detect_speech(JSContext *ctx, JSValueConst thi
     return result;
 }
 
+// sayAndDetectSpeechEx(textToSpeech, asrEngine, [timeoutSec, asrExtraParam, dtmfHandler, udata])
+static JSValue js_session_say_and_detect_speech_ex(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    input_callback_state_t cb_state = { 0 };
+    switch_input_args_t args = { 0 };
+    switch_status_t status = 0;
+    uint32_t timeout = 0;
+    char *stt_result = NULL;
+    char *stt_source = NULL;
+    char *asr_extra_params = NULL;
+    const char *text = NULL;
+    const char *extra_params = NULL;
+    const char *asr_engine_name = NULL;
+    const char *ch_asr_engine_name = NULL;
+    JSValue result;
+
+    SESSION_SANITY_CHECK();
+
+    if(argc < 2 || QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "sayAndDetectSpeech(textToSpeech, asrEngine, [timeoutSec, asrExtraParam, dtmfHandler, udata])");
+    }
+
+    if(!QJS_IS_NULL(argv[1])) {
+        asr_engine_name = JS_ToCString(ctx, argv[1]);
+    } else {
+        ch_asr_engine_name = switch_channel_get_variable(switch_core_session_get_channel(jss->session), "asr_engine");
+    }
+
+    if(zstr(asr_engine_name) && zstr(ch_asr_engine_name) ) {
+        return JS_ThrowTypeError(ctx, "Missing argument: asrEngine");
+    }
+
+    if(argc > 2) {
+        JS_ToUint32(ctx, &timeout, argv[2]);
+    }
+    if(argc > 3) {
+        extra_params = JS_ToCString(ctx, argv[3]);
+    }
+    if(argc > 4 && JS_IsFunction(ctx, argv[4])) {
+        memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss = jss;
+        cb_state.arg = (argc > 5 ? argv[5] : JS_UNDEFINED);
+        cb_state.function = argv[4];
+
+        args.input_callback = xxx_collect_input_callback;
+        args.buf = &cb_state;
+        args.buflen = sizeof(cb_state);
+    }
+
+    text = JS_ToCString(ctx, argv[0]);
+    stt_source = switch_mprintf("say:%s", text);
+
+    if(extra_params) {
+        asr_extra_params = switch_mprintf("{timeout=%d, %s}", timeout, extra_params);
+    } else {
+        asr_extra_params = switch_mprintf("{timeout=%d}", timeout);
+    }
+
+    switch_channel_flush_dtmf(switch_core_session_get_channel(jss->session));
+    status = switch_ivr_play_and_detect_speech_ex(jss->session, stt_source, asr_engine_name ? asr_engine_name : ch_asr_engine_name, asr_extra_params, &stt_result, timeout, &args);
+
+    if(status == SWITCH_STATUS_SUCCESS || status == SWITCH_STATUS_FALSE) {
+        result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech_ex() failed (status=%i)\n", status);
+    }
+
+    JS_FreeCString(ctx, text);
+    JS_FreeCString(ctx, asr_engine_name);
+    JS_FreeCString(ctx, extra_params);
+    switch_safe_free(asr_extra_params);
+    switch_safe_free(stt_source);
+
+    return result;
+}
+
 // detectSpeech(timeoutSec, [asrExtraParam, dtmfHandler, udata])
 static JSValue js_session_detect_speech(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
@@ -786,6 +963,75 @@ static JSValue js_session_detect_speech(JSContext *ctx, JSValueConst this_val, i
     return result;
 }
 
+// detectSpeechEx(asrEngine, timeoutSec, [asrExtraParam, dtmfHandler, udata])
+static JSValue js_session_detect_speech_ex(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    input_callback_state_t cb_state = { 0 };
+    switch_input_args_t args = { 0 };
+    switch_status_t status = 0;
+    uint32_t timeout = 0;
+    char *stt_result = NULL;
+    char *asr_extra_params = NULL;
+    const char *extra_params = NULL;
+    const char *asr_engine_name = NULL;
+    const char *ch_asr_engine_name = NULL;
+    JSValue result;
+
+    SESSION_SANITY_CHECK();
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "detectSpeechEx(asrEngine, timeoutSec, [asrExtraParam, dtmfHandler, udata])");
+    }
+
+    if(!QJS_IS_NULL(argv[0])) {
+        asr_engine_name = JS_ToCString(ctx, argv[0]);
+    } else {
+        ch_asr_engine_name = switch_channel_get_variable(switch_core_session_get_channel(jss->session), "asr_engine");
+    }
+
+    if(zstr(asr_engine_name) && zstr(ch_asr_engine_name)) {
+        return JS_ThrowTypeError(ctx, "Missing argument: asrEngine");
+    }
+
+    if(argc > 1) {
+        JS_ToUint32(ctx, &timeout, argv[1]);
+    }
+    if(argc > 2) {
+        extra_params = JS_ToCString(ctx, argv[2]);
+    }
+    if(argc > 3 && JS_IsFunction(ctx, argv[3])) {
+        memset(&cb_state, 0, sizeof(cb_state));
+        cb_state.jss = jss;
+        cb_state.arg = (argc > 4 ? argv[4] : JS_UNDEFINED);
+        cb_state.function = argv[3];
+
+        args.input_callback = xxx_collect_input_callback;
+        args.buf = &cb_state;
+        args.buflen = sizeof(cb_state);
+    }
+
+    if(extra_params) {
+        asr_extra_params = switch_mprintf("{timeout=%d, %s}", timeout, extra_params);
+    } else {
+        asr_extra_params = switch_mprintf("{timeout=%d}", timeout);
+    }
+
+    switch_channel_flush_dtmf(switch_core_session_get_channel(jss->session));
+    status = switch_ivr_play_and_detect_speech_ex(jss->session, NULL, asr_engine_name ? asr_engine_name : ch_asr_engine_name, asr_extra_params, &stt_result, timeout, &args);
+
+    if(status == SWITCH_STATUS_SUCCESS || status == SWITCH_STATUS_FALSE) {
+        result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech_ex() failed (status=%i)\n", status);
+    }
+
+    JS_FreeCString(ctx, asr_engine_name);
+    JS_FreeCString(ctx, extra_params);
+    switch_safe_free(asr_extra_params);
+
+    return result;
+}
+
 
 // recordFile(fileName, [limitSec, threshold, silinceHits, dtmfCallback, udata])
 static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
@@ -814,19 +1060,16 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
     if(argc > 1) {
         JS_ToUint32(ctx, &limit, argv[1]);
     }
-
     if(argc > 2) {
         uint32_t val;
         JS_ToUint32(ctx, &val, argv[2]);
         fh.thresh = val;
     }
-
     if(argc > 3) {
         uint32_t val;
         JS_ToUint32(ctx, &val, argv[3]);
         fh.silence_hits = val;
     }
-
     if(argc > 4 && JS_IsFunction(ctx, argv[4])) {
         memset(&cb_state, 0, sizeof(cb_state));
         cb_state.jss = jss;
@@ -849,6 +1092,7 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
     return JS_TRUE;
 }
 
+// collectInput(dtmfCallback, [udata, absTimeout, digitTimeout])
 static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
     input_callback_state_t cb_state = { 0 };
@@ -857,26 +1101,25 @@ static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, i
 
     SESSION_SANITY_CHECK();
 
-    if(argc > 0) {
-        if(!JS_IsFunction(ctx, argv[0])) {
-            return JS_ThrowTypeError(ctx, "Invalid argument: callback function");
-        }
-        memset(&cb_state, 0, sizeof(cb_state));
-        cb_state.jss_obj = this_val;
-        cb_state.jss = jss;
-        cb_state.arg = (argc > 1 ? argv[1] : JS_UNDEFINED);
-        cb_state.function = argv[0];
-
-        args.input_callback = xxx_collect_input_callback;
-        args.buf = &cb_state;
-        args.buflen = sizeof(cb_state);
+    if(argc < 1 || QJS_IS_NULL(argv[0]) || !JS_IsFunction(ctx, argv[0])) {
+        return JS_ThrowTypeError(ctx, "collectInput(dtmfCallback, [udata, absTimeout, digitTimeout])");
     }
 
-    if(argc == 3) {
+    memset(&cb_state, 0, sizeof(cb_state));
+    cb_state.jss_obj = this_val;
+    cb_state.jss = jss;
+    cb_state.arg = (argc > 1 ? argv[1] : JS_UNDEFINED);
+    cb_state.function = argv[0];
+
+    args.input_callback = xxx_collect_input_callback;
+    args.buf = &cb_state;
+    args.buflen = sizeof(cb_state);
+
+    if(argc > 2) {
         JS_ToUint32(ctx, &abs_timeout, argv[2]);
-    } else if(argc > 3) {
-        JS_ToUint32(ctx, &digit_timeout, argv[2]);
-        JS_ToUint32(ctx, &abs_timeout, argv[3]);
+    }
+    if(argc > 3) {
+        JS_ToUint32(ctx, &digit_timeout, argv[3]);
     }
 
     switch_channel_flush_dtmf(switch_core_session_get_channel(jss->session));
@@ -1437,10 +1680,14 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("streamFile", 1, js_session_stream_file),
     JS_CFUNC_DEF("bgStreamStart", 1, js_session_bg_stream_start),
     JS_CFUNC_DEF("bgStreamStop", 1, js_session_bg_stream_stop),
+    JS_CFUNC_DEF("bgStreamCtl", 1, js_session_bg_stream_ctl),
     JS_CFUNC_DEF("playAndGetDigits", 1, js_session_play_and_get_digits),
     JS_CFUNC_DEF("playAndDetectSpeech", 1, js_session_play_and_detect_speech),
+    JS_CFUNC_DEF("playAndDetectSpeechEx", 1, js_session_play_and_detect_speech_ex),
     JS_CFUNC_DEF("sayAndDetectSpeech", 1, js_session_say_and_detect_speech),
+    JS_CFUNC_DEF("sayAndDetectSpeechEx", 1, js_session_say_and_detect_speech_ex),
     JS_CFUNC_DEF("detectSpeech", 1, js_session_detect_speech),
+    JS_CFUNC_DEF("detectSpeechEx", 1, js_session_detect_speech_ex),
     JS_CFUNC_DEF("recordFile", 1, js_session_record_file),
     JS_CFUNC_DEF("collectInput", 1, js_session_collect_input),
     JS_CFUNC_DEF("flushEvents", 1, js_session_flush_events),

@@ -6,7 +6,7 @@
  - added playAndDetectSpeech,sayAndDetectSpeech (Session) (see examples/v17_speechDetect.js)<br>
  - added detectSpeech (Session)<br>
  - added speakEx and modified speak function (Session) <br>
- - added bgStreamStart, bgStreamStop for MOH (Session)
+ - added bgStreamStart, bgStreamStop, bgStreamCtl for MOH (Session)
  - changed arguments sequences in: streamFile, recordFile (Session)
  - IVS class was removed <br>
  - ... in develooping ...
