@@ -47,15 +47,15 @@ switch_status_t js_curl_creq_conf_alloc(js_curl_creq_conf_t **conf) {
     curl_conf_t *curl_conf = NULL;
 
     if((status = switch_core_new_memory_pool(&pool)) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "pool fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
         switch_goto_status(SWITCH_STATUS_GENERR, out);
     }
     if((conf_local = switch_core_alloc(pool, sizeof(js_curl_creq_conf_t))) == NULL) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_core_alloc()\n");
         switch_goto_status(SWITCH_STATUS_GENERR, out);
     }
     if((status = curl_config_alloc(&curl_conf, pool, true)) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "curl_config_alloc()\n");
         switch_goto_status(SWITCH_STATUS_GENERR, out);
     }
     conf_local->pool = pool;

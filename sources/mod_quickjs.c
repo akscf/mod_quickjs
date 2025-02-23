@@ -208,6 +208,21 @@ static JSValue js_md5(JSContext *ctx, JSValueConst this_val, int argc, JSValueCo
     return JS_NewStringLen(ctx, digest, sizeof(digest));
 }
 
+static JSValue js_crc32(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    const char *str = NULL;
+    uint32_t crc = 0;
+
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
+        return JS_NewInt32(ctx, 0);
+    }
+
+    str = JS_ToCString(ctx, argv[0]);
+    crc = switch_crc32_8bytes((char *)str, strlen(str));
+    JS_FreeCString(ctx, str);
+
+    return JS_NewInt32(ctx, crc);
+}
+
 /* seconds */
 static JSValue js_epoch_time(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     time_t tm = switch_epoch_time_now(NULL);
@@ -309,22 +324,106 @@ static JSValue js_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValu
 
 static JSValue js_unlink(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     script_t *script = JS_GetContextOpaque(ctx);
-    const char *path = NULL;
+    const char *fpath = NULL;
 
     if(!script) {
         return JS_ThrowTypeError(ctx, "Invalid ctx");
     }
 
-    path = JS_ToCString(ctx, argv[0]);
-    if(zstr(path)) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: filename");
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "unlink(filename)");
+    }
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_FALSE;
     }
 
-    unlink(path);
+    fpath = JS_ToCString(ctx, argv[0]);
+    unlink(fpath);
 
-    JS_FreeCString(ctx, path);
+    JS_FreeCString(ctx, fpath);
     return JS_TRUE;
 }
+
+static JSValue js_mkdir(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
+    const char *fpath = NULL;
+    JSValue ret_val = JS_FALSE;
+
+    if(!script) {
+        return JS_ThrowTypeError(ctx, "Invalid ctx");
+    }
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "mkdir(dirName)");
+    }
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_FALSE;
+    }
+
+    fpath = JS_ToCString(ctx, argv[0]);
+    if(switch_directory_exists(fpath, NULL) == SWITCH_STATUS_SUCCESS) {
+        ret_val = JS_TRUE;
+    } else {
+        if(switch_dir_make_recursive(fpath, SWITCH_DEFAULT_DIR_PERMS, NULL) == SWITCH_STATUS_SUCCESS) {
+            ret_val = JS_TRUE;
+        }
+    }
+
+    JS_FreeCString(ctx, fpath);
+    return ret_val;
+}
+
+static JSValue js_file_exists(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
+    const char *fpath = NULL;
+    JSValue ret_val = JS_FALSE;
+
+    if(!script) {
+        return JS_ThrowTypeError(ctx, "Invalid ctx");
+    }
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "fileExists(fileName)");
+    }
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_FALSE;
+    }
+
+    fpath = JS_ToCString(ctx, argv[0]);
+    if(switch_file_exists(fpath, NULL) == SWITCH_STATUS_SUCCESS) {
+        ret_val = JS_TRUE;
+    }
+
+    JS_FreeCString(ctx, fpath);
+    return ret_val;
+}
+
+static JSValue js_dir_exists(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
+    const char *fpath = NULL;
+    JSValue ret_val = JS_FALSE;
+
+    if(!script) {
+        return JS_ThrowTypeError(ctx, "Invalid ctx");
+    }
+
+    if(argc < 1) {
+        return JS_ThrowTypeError(ctx, "dirExists(dirName)");
+    }
+    if(QJS_IS_NULL(argv[0])) {
+        return JS_FALSE;
+    }
+
+    fpath = JS_ToCString(ctx, argv[0]);
+    if(switch_directory_exists(fpath, NULL) == SWITCH_STATUS_SUCCESS) {
+        ret_val = JS_TRUE;
+    }
+
+    JS_FreeCString(ctx, fpath);
+    return ret_val;
+}
+
+
 
 static JSValue js_get_path(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     script_t *script = JS_GetContextOpaque(ctx);
@@ -554,7 +653,12 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "flags", flags_obj);
 
     runtime_obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, runtime_obj, "type", JS_NewString(ctx, "opensource"));
     JS_SetPropertyStr(ctx, runtime_obj, "version", JS_NewString(ctx, MOD_VERSION));
+    JS_SetPropertyStr(ctx, runtime_obj, "switchId", JS_NewString(ctx, switch_core_get_uuid()));
+    JS_SetPropertyStr(ctx, runtime_obj, "switchName", JS_NewString(ctx, switch_core_get_switchname()));
+    JS_SetPropertyStr(ctx, runtime_obj, "switchVersion", JS_NewString(ctx, switch_version_full()));
+    JS_SetPropertyStr(ctx, runtime_obj, "hostname", JS_NewString(ctx, switch_core_get_hostname()));
     JS_SetPropertyStr(ctx, global_obj, "runtime", runtime_obj);
 
     script_obj = JS_NewObject(ctx);
@@ -594,7 +698,11 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "system", JS_NewCFunction(ctx, js_system, "system", 1));
     JS_SetPropertyStr(ctx, global_obj, "exit", JS_NewCFunction(ctx, js_exit, "exit", 1));
     JS_SetPropertyStr(ctx, global_obj, "md5", JS_NewCFunction(ctx, js_md5, "md5", 1));
+    JS_SetPropertyStr(ctx, global_obj, "crc32", JS_NewCFunction(ctx, js_crc32, "crc32", 1));
     JS_SetPropertyStr(ctx, global_obj, "unlink", JS_NewCFunction(ctx, js_unlink, "unlink", 1));
+    JS_SetPropertyStr(ctx, global_obj, "mkdir", JS_NewCFunction(ctx, js_mkdir, "mkdir", 1));
+    JS_SetPropertyStr(ctx, global_obj, "dirExists", JS_NewCFunction(ctx, js_dir_exists, "dirExists", 1));
+    JS_SetPropertyStr(ctx, global_obj, "fileExists", JS_NewCFunction(ctx, js_file_exists, "fileExists", 1));
     JS_SetPropertyStr(ctx, global_obj, "epochTime", JS_NewCFunction(ctx, js_epoch_time, "epochTime", 1));
     JS_SetPropertyStr(ctx, global_obj, "microTime", JS_NewCFunction(ctx, js_micro_time, "microTime", 1));
     JS_SetPropertyStr(ctx, global_obj, "apiExecute", JS_NewCFunction(ctx, js_api_execute, "apiExecute", 2));
