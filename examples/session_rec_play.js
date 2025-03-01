@@ -5,15 +5,14 @@ function hangup_hook(state) {
     HANGUP = true;
 }
 
-function playback_callback(filehandle, digit, udata) {
+function playback_callback(session, etype, edata, hdata) {
 
-    console_log('notice', "PLAYBACK-CALLBACK: digit=[" + digit + "], user_data=[" + udata + "]");
+    consoleLog('notice', "PLAYBACK-CALLBACK: etype=[" + etype + "], edata=[" + edata + "], hdata=[" + hdata + "]");
 
-    if(!filehandle) {
+    /*if(!filehandle) {
         console_log('error', "PLAYBACK-CALLBACK: filehandle == NULL");
         return;
     }
-
     if(digit == '1') {
         filehandle.volume = '+1';
     } else if(digit == '2') {
@@ -30,7 +29,7 @@ function playback_callback(filehandle, digit, udata) {
         filehandle.pause();
     } else if(digit == '#') {
         return false;
-    }
+    }*/
     
     return true;
 }
@@ -65,8 +64,7 @@ if(typeof(session) != 'undefined') {
     session.recordFile(recFile, playback_callback, 'record', 10);
 
     console_log('notice', "TEST: session.streamFile(), file: [" + recFile.path + "]");
-    //session.streamFile(recFile.path, playback_callback, 'playback');
-    session.streamFile(recFile, playback_callback, 'playback');
+    session.playback(recFile, playback_callback, 'playback');
 
 }
 

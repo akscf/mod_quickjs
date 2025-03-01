@@ -345,7 +345,7 @@ static JSValue js_curl_perform_request(JSContext *ctx, JSValueConst this_val, in
     JSValue ret_obj = JS_FALSE;
 
     if(!js_curl || js_curl->fl_destroying) {
-        return JS_ThrowTypeError(ctx, "Malformed reference");
+        return JS_ThrowTypeError(ctx, "Context destroyed");
     }
 
     if(zstr(js_curl->url)) {
@@ -436,16 +436,16 @@ out:
 }
 
 /**
- ** async way
+ ** bgPerform( [string|arrayBuffer] || {type: [file|simple], name: fieldName, value: fieldValue}, {...})
  **/
-static JSValue js_curl_perform_request_async(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_curl_perform_bg_request(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     js_curl_creq_conf_t *creq_conf = NULL;
     JSValue ret_obj = JS_FALSE;
 
     if(!js_curl || js_curl->fl_destroying) {
-        return JS_ThrowTypeError(ctx, "Malformed reference");
+        return JS_ThrowTypeError(ctx, "Context destroyed");
     }
 
     if(zstr(js_curl->url)) {
@@ -530,7 +530,7 @@ out:
     return ret_obj;
 }
 
-static JSValue js_curl_get_async_result(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+static JSValue js_curl_get_bg_request_result(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_curl_t *js_curl = JS_GetOpaque2(ctx, this_val, js_curl_get_classid(ctx));
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     js_curl_creq_conf_t *creq_conf = NULL;
@@ -538,7 +538,7 @@ static JSValue js_curl_get_async_result(JSContext *ctx, JSValueConst this_val, i
     void *pop = NULL;
 
     if(!js_curl || js_curl->fl_destroying) {
-        return JS_ThrowTypeError(ctx, "Malformed reference");
+        return JS_ThrowTypeError(ctx, "Context destroyed");
     }
 
     if(switch_queue_trypop(js_curl->events, &pop) == SWITCH_STATUS_SUCCESS) {
@@ -579,8 +579,8 @@ static const JSCFunctionListEntry js_curl_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("proxyCAcert", js_curl_property_get, js_curl_property_set, PROP_SSL_PROXY_CACERT),
     //
     JS_CFUNC_DEF("perform", 1, js_curl_perform_request),
-    JS_CFUNC_DEF("performAsync", 1, js_curl_perform_request_async),
-    JS_CFUNC_DEF("getAsyncResult", 1, js_curl_get_async_result),
+    JS_CFUNC_DEF("performBg", 1, js_curl_perform_bg_request),
+    JS_CFUNC_DEF("getResult", 1, js_curl_get_bg_request_result),
 };
 
 static void js_curl_finalizer(JSRuntime *rt, JSValue val) {
@@ -641,17 +641,13 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
     const char *url = NULL;
     uint32_t timeout = 0;
 
-    if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Not enough arguments");
-    }
-    if(QJS_IS_NULL(argv[0])) {
-        err = JS_ThrowTypeError(ctx, "Invalid argument: url");
-        goto fail;
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "CURL(url, [method, timeout, credentials, contentType])");
     }
 
     url = JS_ToCString(ctx, argv[0]);
 
-    if(argc > 1) {
+    if(argc > 1 && !QJS_IS_NULL(argv[1])) {
         method = JS_ToCString(ctx, argv[1]);
     }
 
@@ -659,11 +655,11 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
         JS_ToUint32(ctx, &timeout, argv[2]);
     }
 
-    if(argc > 3) {
+    if(argc > 3 && !QJS_IS_NULL(argv[3])) {
         credentials = JS_ToCString(ctx, argv[3]);
     }
 
-    if(argc > 4) {
+    if(argc > 4 && !QJS_IS_NULL(argv[4])) {
         content_type = JS_ToCString(ctx, argv[4]);
     }
 
@@ -684,6 +680,7 @@ static JSValue js_curl_contructor(JSContext *ctx, JSValueConst new_target, int a
     js_curl->credentials = (credentials ? switch_core_strdup(pool, credentials) : NULL);
     js_curl->content_type = (content_type ? switch_core_strdup(pool, content_type) : DEFAULT_CONTENT_TYPE);
     js_curl->request_timeout = timeout;
+    js_curl->connect_timeout = timeout;
     js_curl->fl_destroying = false;
 
     switch_queue_create(&js_curl->events, CURL_QUEUE_SIZE, pool);

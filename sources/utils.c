@@ -154,25 +154,25 @@ JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name) {
 }
 
 void js_ctx_dump_error(script_t *script, JSContext *ctx) {
-    if(script->fl_exit) {
+    if(script && script->fl_exit) {
         return;
-    }
-
-    JSValue exception_val = JS_GetException(ctx);
-    JSValue stk_val = JS_GetPropertyStr(ctx, exception_val, "stack");
-    const char *err_str = JS_ToCString(ctx, exception_val);
-    const char *stk_str = (JS_IsUndefined(stk_val) ? NULL : JS_ToCString(ctx, stk_val));
-
-    if(script) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "QJS [%s/%s]: \n%s %s\n", script->name, script->id, (err_str ? err_str : "[no error message]"), stk_str);
     } else {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "QJS: %s %s\n", (err_str ? err_str : "[no error message]"), stk_str);
-    }
+        JSValue exception_val = JS_GetException(ctx);
+        JSValue stk_val = JS_GetPropertyStr(ctx, exception_val, "stack");
+        const char *err_str = JS_ToCString(ctx, exception_val);
+        const char *stk_str = (JS_IsUndefined(stk_val) ? NULL : JS_ToCString(ctx, stk_val));
 
-    JS_FreeCString(ctx, err_str);
-    JS_FreeCString(ctx, stk_str);
-    JS_FreeValue(ctx, stk_val);
-    JS_FreeValue(ctx, exception_val);
+        if(script) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "QJS [%s/%s]: \n%s %s\n", script->name, script->id, (err_str ? err_str : "[no error message]"), stk_str);
+        } else {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "QJS: %s %s\n", (err_str ? err_str : "[no error message]"), stk_str);
+        }
+
+        JS_FreeCString(ctx, err_str);
+        JS_FreeCString(ctx, stk_str);
+        JS_FreeValue(ctx, stk_val);
+        JS_FreeValue(ctx, exception_val);
+    }
 }
 
 char *safe_pool_strdup(switch_memory_pool_t *pool, const char *str) {

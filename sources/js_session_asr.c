@@ -81,12 +81,14 @@ static switch_status_t play_and_detect_input_callback(switch_core_session_t *ses
 }
 
 
-SWITCH_DECLARE(switch_status_t) switch_ivr_play_and_detect_speech_ex(switch_core_session_t *session, const char *file, const char *mod_name, const char *grammar, char **result, uint32_t input_timeout, switch_input_args_t *args) {
+SWITCH_DECLARE(switch_status_t) switch_ivr_play_and_detect_speech_ex(switch_core_session_t *session, const char *file, const char *mod_name, const char *grammar, char **result, uint32_t timeout, switch_input_args_t *args) {
     switch_status_t status = SWITCH_STATUS_FALSE;
     int recognizing = 0;
     switch_input_args_t myargs = { 0 };
     play_and_detect_speech_state_t state = { 0, "", NULL };
     switch_channel_t *channel = switch_core_session_get_channel(session);
+    uint8_t fl_timeout =0;
+    time_t expiry = 0;
 
     arg_recursion_check_start(args);
 
@@ -94,9 +96,6 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_and_detect_speech_ex(switch_core
         goto done;
     }
 
-    if (!input_timeout) input_timeout = 5000;
-
-    /* start speech detection */
     if ((status = switch_ivr_detect_speech(session, mod_name, grammar, "", NULL, NULL)) != SWITCH_STATUS_SUCCESS) {
         /* map SWITCH_STATUS_FALSE to SWITCH_STATUS_GENERR to indicate grammar load failed SWITCH_STATUS_NOT_INITALIZED will be passed back to indicate ASR resource problem */
         if (status == SWITCH_STATUS_FALSE) {
@@ -133,15 +132,21 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_and_detect_speech_ex(switch_core
         goto done;
     }
 
-    /* wait for result if not done */
     if (!state.done) {
         switch_ivr_detect_speech_start_input_timers(session);
+        expiry = timeout ? (timeout + 5 + switch_epoch_time_now(NULL)) : 0;
+
 #ifdef MOD_QUICKJS_DEBUG
         switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "(%s) WAITING FOR RESULT\n", switch_channel_get_name(channel));
 #endif
 
         while (!state.done && switch_channel_ready(channel)) {
-            status = switch_ivr_sleep(session, input_timeout, SWITCH_FALSE, &myargs);
+            status = switch_ivr_sleep(session, 1000, SWITCH_FALSE, &myargs);
+
+            if(expiry && expiry <= switch_epoch_time_now(NULL)) {
+                fl_timeout = 1;
+                goto done;
+            }
 
             if (args && args->dmachine && switch_ivr_dmachine_last_ping(args->dmachine) != SWITCH_STATUS_SUCCESS) {
                 state.done |= PLAY_AND_DETECT_DONE;
@@ -152,11 +157,13 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_and_detect_speech_ex(switch_core
                 status = SWITCH_STATUS_FALSE;
                 goto done;
             }
+
         }
     }
 
 done:
-    if (recognizing && !(state.done & PLAY_AND_DETECT_DONE_RECOGNIZING)) {
+    //if (recognizing && !(state.done & PLAY_AND_DETECT_DONE_RECOGNIZING)) {
+    if (recognizing) {
         switch_ivr_pause_detect_speech(session);
     }
     if (recognizing && switch_channel_var_true(channel, "play_and_detect_speech_close_asr")) {
@@ -166,11 +173,17 @@ done:
     if (state.done) {
         status = SWITCH_STATUS_SUCCESS;
     }
+
     if (result) {
         *result = state.result;
+    } else {
+        if(fl_timeout) {
+#ifdef MOD_QUICKJS_DEBUG
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "speech detect timeout\n");
+#endif
+        }
     }
 
     arg_recursion_check_stop(args);
-
     return status;
 }

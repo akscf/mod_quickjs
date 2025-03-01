@@ -33,7 +33,7 @@ consoleLog('notice', "curl.proxyCAcert.........: " + curl.proxyCAcert);
 
 var resp = curl.perform();
 if(!resp) {
-    consoleLog('err', "Couldn't perform the request");
+    consoleLog('err', "Uanble to perform request");
 } else {
     consoleLog('notice', "response.code: [" + resp.code + "]");
     consoleLog('notice', "response.body: [" + resp.body + "]");
@@ -49,7 +49,7 @@ var jsonData = JSON.stringify({'id': 1, 'service': 'myServiceName', 'method': 'm
 resp = curl.perform(jsonData);
 
 if(!resp) {
-    consoleLog('err', "Couldn't perform the request");
+    consoleLog('err', "Unable to perform request");
 } else {
     consoleLog('notice', "response.code: [" + resp.code + "]");
     consoleLog('notice', "response.body: [" + resp.body + "]");

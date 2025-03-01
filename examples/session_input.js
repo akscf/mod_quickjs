@@ -5,12 +5,12 @@ function hangup_hook(state) {
     HANGUP = true;
 }
 
-function input_callback(session, digit, udata) {
+function input_callback(session, etype, edata, hdata) {
 
-    console_log('notice', "INPUT-CALLBACK: digit=[" + digit + "], user_data=[" + udata + "]");
+    consoleLog('notice', "INPUT-CALLBACK: etype=[" + etype + "], edata=[" + edata + "], hdata=[" + hdata + "]");
 
-    if(digit == '#') {
-	return false;
+    if(etype == "dtmf" && edata == '#') {
+        return false;
     }
 
     return true;

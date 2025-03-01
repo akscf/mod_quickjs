@@ -11,17 +11,17 @@ var recv_cnt = 0;
 
 while(!script.isInterrupted()) {
     if(send_cnt < 3) {
-        var jid = curl.performAsync();
+        var jid = curl.performBg();
         if(jid) {
             consoleLog('notice', "job-id: " + jid);
             send_cnt++;
         } else {
-            consoleLog('error', "perform failed");
+            consoleLog('error', "unable to perform request");
         }
         continue;
     }
 
-    var res = curl.getAsyncResult();
+    var res = curl.getResult();
     if(res) {
         //consoleLog('notice', "RESULT: " + JSON.stringify(res));
         consoleLog('notice', "job-done: " + res.jid + " - done (code=" + res.code + ")");

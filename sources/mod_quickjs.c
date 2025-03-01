@@ -1,5 +1,5 @@
 /**
- * (C)2021 aks
+ * (C)2021-2025 aks
  * https://github.com/akscf/
  **/
 #include "mod_quickjs.h"
@@ -507,7 +507,7 @@ out:
     return status;
 }
 
-static switch_status_t script_launch(switch_core_session_t *session, char *script_name, char *script_args, char *script_id, uint8_t async) {
+static switch_status_t script_launch(switch_core_session_t *session, char *script_name, char *script_args, char *script_id, uint8_t inbg) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     char *script_path_local = NULL;
     char *script_args_local = NULL;
@@ -571,7 +571,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     switch_core_hash_insert(globals.scripts_map, script->id, script);
     switch_mutex_unlock(globals.mutex_scripts_map);
 
-    if(async) {
+    if(inbg) {
         launch_thread(pool, script_thread, script);
     } else {
         script_thread(NULL, script);
@@ -646,14 +646,14 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_odbc_class_register(ctx, global_obj);
     fl_odbc_enable = 1;
 #endif
-    script->fl_ready = false; // unset
+    script->fl_ready = false; // clear
 
     flags_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, flags_obj,  "odbcEnabled", JS_NewString(ctx, (fl_odbc_enable ? "true" : "false")));
     JS_SetPropertyStr(ctx, global_obj, "flags", flags_obj);
 
     runtime_obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, runtime_obj, "type", JS_NewString(ctx, "opensource"));
+    JS_SetPropertyStr(ctx, runtime_obj, "type", JS_NewString(ctx, MOD_RT_TYPE));
     JS_SetPropertyStr(ctx, runtime_obj, "version", JS_NewString(ctx, MOD_VERSION));
     JS_SetPropertyStr(ctx, runtime_obj, "switchId", JS_NewString(ctx, switch_core_get_uuid()));
     JS_SetPropertyStr(ctx, runtime_obj, "switchName", JS_NewString(ctx, switch_core_get_switchname()));
@@ -711,7 +711,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "getPath", JS_NewCFunction(ctx, js_get_path, "getPath", 1));
     JS_SetPropertyStr(ctx, global_obj, "getUUID", JS_NewCFunction(ctx, js_get_uuid, "getUUID", 1));
 
-    // add session obj
     if(script->session) {
         script->fl_ready = true;
 
@@ -724,7 +723,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
         JS_SetPropertyStr(ctx, global_obj, "session", session_obj);
     }
 
-    // eval
     script->fl_ready = true;
     result = JS_Eval(ctx, script->script_buf, script->script_len, script->name, JS_EVAL_TYPE_GLOBAL | JS_EVAL_TYPE_MODULE);
 
@@ -737,14 +735,15 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 
 out:
     JS_FreeValue(ctx, global_obj);
+
     script->fl_destroyed = true;
     script_wait_unlock(script);
 
     if(ctx) { JS_FreeContext(ctx); }
     if(rt)  { JS_FreeRuntime(rt); }
 
-    /* ready must be changed only after rt/ctx been destroyed! */
-    /* Otherwise it corrupts js_session */
+    /* ready must be changed only after rt/ctx been destroyed!  */
+    /* Otherwise it corrupts js_session                         */
     script->fl_ready = false;
 
     script->rt = NULL;
@@ -768,8 +767,9 @@ out:
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 #define CMD_SYNTAX "\n" \
     "list - show running scripts\n" \
-    "run   scriptName [args] - launch the script instance\n" \
-    "int   scriptId - interrupt script\n"
+    "run-bg scriptName [args] - launch the script in backgroud\n" \
+    "run    scriptName [args] - launch the script\n" \
+    "int    scriptId - interrupt script\n"
 
 SWITCH_STANDARD_API(quickjs_cmd) {
     switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -807,6 +807,15 @@ SWITCH_STANDARD_API(quickjs_cmd) {
         goto usage;
     }
     if(strcasecmp(argv[0], "run") == 0) {
+        char *script_args = (argc > 2 ? ((char *)cmd + (strlen(argv[0]) + strlen(argv[1]) + 2)) : NULL);
+
+        if((status = script_launch(session, argv[1], script_args, NULL, false)) != SWITCH_STATUS_SUCCESS) {
+            stream->write_function(stream, "-ERR: %i\n", status);
+        }
+
+        goto out;
+    }
+    if(strcasecmp(argv[0], "run-bg") == 0) {
         char *script_args = (argc > 2 ? ((char *)cmd + (strlen(argv[0]) + strlen(argv[1]) + 2)) : NULL);
         char *script_id = NULL;
 
@@ -925,11 +934,11 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
     }
 
     *module_interface = switch_loadable_module_create_module_interface(pool, modname);
-    SWITCH_ADD_API(cmd_interface, "qjs", "quickjs scripts", quickjs_cmd, CMD_SYNTAX);
-    SWITCH_ADD_APP(app_interface, "qjs", "quickjs scripts", "quickjs scripts", quickjs_app, APP_SYNTAX, SAF_NONE);
+    SWITCH_ADD_API(cmd_interface, "qjs", "quickjs", quickjs_cmd, CMD_SYNTAX);
+    SWITCH_ADD_APP(app_interface, "qjs", "quickjs", "quickjs", quickjs_app, APP_SYNTAX, SAF_NONE);
 
     globals.fl_shutdown = false;
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_quckjs (%s)\n", MOD_VERSION);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_quckjs (%s) [%s]\n", MOD_VERSION, MOD_RT_TYPE);
 
 done:
     if(xml) {
