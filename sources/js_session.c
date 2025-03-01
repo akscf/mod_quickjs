@@ -34,6 +34,7 @@
 #define PROP_ASR_ENGINE                     20
 #define PROP_LANGUAGE                       21
 #define PROP_BG_STREAMS                     22
+#define PROP_AUTO_HANGUP                    23
 
 #define SESSION_SANITY_CHECK() if (!jss || !jss->session) { \
            return JS_ThrowTypeError(ctx, "Session is not initialized"); \
@@ -194,6 +195,9 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
         case PROP_BG_STREAMS: {
             return JS_NewInt32(ctx, jss->bg_streams);
         }
+        case PROP_AUTO_HANGUP: {
+            return (jss->fl_hup_auto ? JS_TRUE : JS_FALSE);
+        }
     }
 
     return JS_UNDEFINED;
@@ -230,6 +234,10 @@ static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JS
             JS_FreeCString(ctx, str);
             return JS_TRUE;
         }
+        case PROP_AUTO_HANGUP: {
+            jss->fl_hup_auto = JS_ToBool(ctx, val);
+            return JS_TRUE;
+        }
     }
 
     return JS_FALSE;
@@ -255,19 +263,6 @@ static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val,
 
         switch_channel_set_private(channel, "jss", jss);
         switch_core_event_hook_add_state_change(jss->session, sys_session_hangup_hook);
-    }
-
-    return JS_TRUE;
-}
-
-static JSValue js_session_set_auto_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
-    switch_channel_t *channel = NULL;
-
-    SESSION_SANITY_CHECK();
-
-    if(argc > 0) {
-        jss->fl_hup_auto = JS_ToBool(ctx, argv[0]);
     }
 
     return JS_TRUE;
@@ -1472,9 +1467,9 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CGETSET_MAGIC_DEF("asrEngine", js_session_property_get, js_session_property_set, PROP_ASR_ENGINE),
     JS_CGETSET_MAGIC_DEF("language", js_session_property_get, js_session_property_set, PROP_LANGUAGE),
     JS_CGETSET_MAGIC_DEF("bgStreams", js_session_property_get, js_session_property_set, PROP_BG_STREAMS),
+    JS_CGETSET_MAGIC_DEF("autoHangup", js_session_property_get, js_session_property_set, PROP_AUTO_HANGUP),
     //
     JS_CFUNC_DEF("setHangupHook", 1, js_session_set_hangup_hook),
-    JS_CFUNC_DEF("setAutoHangup", 1, js_session_set_auto_hangup),
     JS_CFUNC_DEF("speak", 1, js_session_speak),
     JS_CFUNC_DEF("speakEx", 1, js_session_speak_ex),
     JS_CFUNC_DEF("playback", 1, js_session_playback),
