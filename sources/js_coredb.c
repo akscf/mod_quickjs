@@ -295,7 +295,7 @@ static int db_callback(void *udata, int argc, char **argv, char **columnNames) {
     JSValue args[1] = { 0 };
     JSValue ret_val;
     JSValue row_data;
-    int i = 0;
+    int rr = 0;
 
     if(!js_coredb) {
         return 0;
@@ -305,7 +305,7 @@ static int db_callback(void *udata, int argc, char **argv, char **columnNames) {
     }
 
     row_data = JS_NewObject(ctx);
-    for(i = 0; i < argc; i++) {
+    for(int i = 0; i < argc; i++) {
         JS_SetPropertyStr(ctx, row_data, columnNames[i], JS_NewString(ctx, argv[i]));
     }
     args[0] = row_data;
@@ -314,12 +314,14 @@ static int db_callback(void *udata, int argc, char **argv, char **columnNames) {
     if(JS_IsException(ret_val)) {
         js_ctx_dump_error(NULL, ctx);
         JS_ResetUncatchableError(ctx);
+    } else if(JS_IsBool(ret_val)) {
+        rr = !JS_ToBool(ctx, ret_val);
     }
 
     JS_FreeValue(ctx, row_data);
     JS_FreeValue(ctx, ret_val);
 
-    return 0;
+    return rr;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------

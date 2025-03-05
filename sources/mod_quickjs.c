@@ -4,7 +4,6 @@
  **/
 #include "mod_quickjs.h"
 #include "js_xml.h"
-#include "js_odbc.h"
 #include "js_coredb.h"
 #include "js_codec.h"
 #include "js_file.h"
@@ -15,6 +14,7 @@
 #include "js_eventhandler.h"
 #include "js_session.h"
 #include "js_curl.h"
+#include "js_dbh.h"
 
 globals_t globals;
 
@@ -235,80 +235,6 @@ static JSValue js_micro_time(JSContext *ctx, JSValueConst this_val, int argc, JS
     return JS_NewInt64(ctx, tm);
 }
 
-static JSValue js_include(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    JSValue ret_val = JS_FALSE;
-    script_t *script = NULL;
-    switch_memory_pool_t *pool = NULL;
-    switch_file_t *fd = NULL;
-    switch_size_t flen = 0;
-    const char *path = NULL;
-    char *path_local = NULL;
-    char *buf = NULL;
-
-    script = JS_GetContextOpaque(ctx);
-    if(!script) {
-        return JS_ThrowTypeError(ctx, "Malformed ctx");
-    }
-
-    if(argc < 1 || QJS_IS_NULL(argv[0])) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: filename");
-    }
-
-    path = JS_ToCString(ctx, argv[0]);
-
-    if(switch_file_exists(path, NULL) == SWITCH_STATUS_SUCCESS) {
-        path_local = strdup(path);
-    } else {
-        path_local = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.script_dir, SWITCH_PATH_SEPARATOR, path);
-        if(switch_file_exists(path_local, NULL) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "File not found (%s)\n", path_local);
-            goto out;
-        }
-    }
-
-    if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
-        goto out;
-    }
-
-    if(switch_file_open(&fd, path_local, SWITCH_FOPEN_READ, SWITCH_FPROT_UREAD, pool) != SWITCH_STATUS_SUCCESS) {
-        ret_val = JS_ThrowTypeError(ctx, "Unable to open file: %s\n", path_local);
-        goto out;
-    }
-
-    if((flen = switch_file_get_size(fd)) > 0) {
-        if((buf = switch_core_alloc(pool, flen)) == NULL) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_alloc()\n");
-            goto out;
-        }
-        if(switch_file_read(fd, buf, &flen) != SWITCH_STATUS_SUCCESS) {
-            ret_val = JS_ThrowTypeError(ctx, "Unable to read file\n");
-            goto out;
-        }
-
-        ret_val = JS_Eval(ctx, buf, flen, path_local, JS_EVAL_TYPE_GLOBAL);
-        if(JS_IsException(ret_val)) {
-            js_ctx_dump_error(script, ctx);
-            JS_ResetUncatchableError(ctx);
-        }
-
-        JS_FreeValue(ctx, ret_val);
-        ret_val = JS_TRUE;
-    }
-
-out:
-    if(fd) {
-        switch_file_close(fd);
-    }
-    if(pool) {
-        switch_core_destroy_memory_pool(&pool);
-    }
-    switch_safe_free(path_local);
-    JS_FreeCString(ctx, path);
-
-    return ret_val;
-}
-
 static JSValue js_is_interrupted(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     script_t *script = JS_GetContextOpaque(ctx);
 
@@ -423,8 +349,6 @@ static JSValue js_dir_exists(JSContext *ctx, JSValueConst this_val, int argc, JS
     return ret_val;
 }
 
-
-
 static JSValue js_get_path(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     script_t *script = JS_GetContextOpaque(ctx);
     const char *type = NULL;
@@ -467,6 +391,103 @@ static JSValue js_get_uuid(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 
     switch_uuid_str((char *)tmp_uuid, sizeof(tmp_uuid));
     return JS_NewString(ctx, (char *)tmp_uuid);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+static JSModuleDef *xxx_js_module_loader(JSContext *ctx, const char *module_name) {
+    JSModuleDef *m = NULL;
+    JSValue func_val;
+    size_t buf_len;
+    uint8_t *buf;
+    char *filename;
+
+    if(!strchr(module_name, '/')) {
+        filename = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.script_dir, SWITCH_PATH_SEPARATOR, module_name);
+    } else {
+        filename = (char *)module_name;
+    }
+
+#ifdef MOD_QUICKJS_DEBUG
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "load module [%s] (%s)\n", module_name, filename);
+#endif
+
+    buf = js_load_file(ctx, &buf_len, filename);
+    if(filename != module_name) {
+        switch_safe_free(filename);
+    }
+
+    if(!buf) {
+        JS_ThrowReferenceError(ctx, "Unable to load module '%s'", module_name);
+        return NULL;
+    }
+
+    func_val = JS_Eval(ctx, (char *)buf, buf_len, module_name, JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
+    js_free(ctx, buf);
+
+    if(JS_IsException(func_val)) {
+        return NULL;
+    }
+
+    js_module_set_import_meta(ctx, func_val, TRUE, FALSE);
+    m = JS_VALUE_GET_PTR(func_val);
+    JS_FreeValue(ctx, func_val);
+
+    return m;
+
+}
+static JSModuleDef *xxx_so_module_loader(JSContext *ctx, const char *module_name) {
+    JSModuleDef *m = NULL;
+    JSInitModuleFunc *init = NULL;
+    void *hd;
+    char *filename;
+
+    if(!strchr(module_name, '/')) {
+        filename = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.lib_dir, SWITCH_PATH_SEPARATOR, module_name);
+    } else {
+        filename = (char *)module_name;
+    }
+
+#ifdef MOD_QUICKJS_DEBUG
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "load module [%s] (%s)\n", module_name, filename);
+#endif
+
+    hd = dlopen(filename, RTLD_NOW | RTLD_LOCAL);
+    if(filename != module_name) {
+        switch_safe_free(filename);
+    }
+
+    if(!hd) {
+        JS_ThrowReferenceError(ctx, "Unable to load module '%s' (%s)", module_name, dlerror());
+        goto fail;
+    }
+
+    init = dlsym(hd, "js_init_module");
+    if (!init) {
+        JS_ThrowReferenceError(ctx, "Unable to load module '%s' (js_init_module not found)", module_name);
+        goto fail;
+    }
+
+    m = init(ctx, module_name);
+    if (!m) {
+        JS_ThrowReferenceError(ctx, "Unable to load module '%s' (initialization error)", module_name);
+fail:
+        if (hd) dlclose(hd);
+        return NULL;
+    }
+
+    return m;
+}
+
+JSModuleDef *xxx_module_loader(JSContext *ctx, const char *module_name, void *opaque) {
+    JSModuleDef *m = NULL;
+
+    if (has_suffix(module_name, ".so")) {
+        m = xxx_so_module_loader(ctx, module_name);
+    } else {
+        m = xxx_js_module_loader(ctx, module_name);
+    }
+
+    return m;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -593,7 +614,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     script_t *script = (script_t *) _ref;
     switch_memory_pool_t *pool = script->pool;
     switch_status_t status = SWITCH_STATUS_SUCCESS;
-    uint8_t fl_odbc_enable = false;
     JSContext *ctx = NULL;
     JSRuntime *rt = NULL;
     JSValue global_obj, session_obj, script_obj, runtime_obj, argc_obj, argv_obj, flags_obj;
@@ -619,6 +639,8 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
         JS_SetMaxStackSize(rt, globals.cfg_rt_stk_size);
     }
 
+    JS_SetModuleLoaderFunc(rt, NULL, xxx_module_loader, NULL);
+
     script->rt = rt;
     script->ctx = ctx;
 
@@ -641,15 +663,11 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     js_eventhandler_class_register(ctx, global_obj);
     js_xml_class_register(ctx, global_obj);
     js_curl_class_register(ctx, global_obj);
+    js_dbh_class_register(ctx, global_obj);
 
-#ifdef JS_ODBC_ENABLE
-    js_odbc_class_register(ctx, global_obj);
-    fl_odbc_enable = 1;
-#endif
     script->fl_ready = false; // clear
 
     flags_obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, flags_obj,  "odbcEnabled", JS_NewString(ctx, (fl_odbc_enable ? "true" : "false")));
     JS_SetPropertyStr(ctx, global_obj, "flags", flags_obj);
 
     runtime_obj = JS_NewObject(ctx);
@@ -692,7 +710,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     /* global fncs */
     JS_SetPropertyStr(ctx, global_obj, "console_log", JS_NewCFunction(ctx, js_console_log, "console_log", 0));
     JS_SetPropertyStr(ctx, global_obj, "consoleLog", JS_NewCFunction(ctx, js_console_log, "consoleLog", 0));
-    JS_SetPropertyStr(ctx, global_obj, "include", JS_NewCFunction(ctx, js_include, "include", 1));
     JS_SetPropertyStr(ctx, global_obj, "msleep", JS_NewCFunction(ctx, js_msleep, "msleep", 1));
     JS_SetPropertyStr(ctx, global_obj, "bridge", JS_NewCFunction(ctx, js_bridge, "bridge", 2));
     JS_SetPropertyStr(ctx, global_obj, "system", JS_NewCFunction(ctx, js_system, "system", 1));
@@ -710,6 +727,11 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getPath", JS_NewCFunction(ctx, js_get_path, "getPath", 1));
     JS_SetPropertyStr(ctx, global_obj, "getUUID", JS_NewCFunction(ctx, js_get_uuid, "getUUID", 1));
+
+    if(globals.fl_use_std) {
+        js_init_module_std(ctx, "std");
+        js_init_module_os(ctx, "os");
+    }
 
     if(script->session) {
         script->fl_ready = true;
@@ -910,13 +932,14 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
             char *var = (char *) switch_xml_attr_soft(xml_param, "name");
             char *val = (char *) switch_xml_attr_soft(xml_param, "value");
 
-	    if(!strcasecmp(var, "rt-stack-size-max")) {
+            if(!strcasecmp(var, "rt-stack-size-max")) {
                 size_t x = atoi(val);
-                if(x > 0) { globals.cfg_rt_stk_size = x * 1024 * 1024; }
-            }
-            if(!strcasecmp(var, "rt-memory-limit")) {
+                if(x > 0) globals.cfg_rt_stk_size = x * 1024 * 1024;
+            } else if(!strcasecmp(var, "rt-memory-limit")) {
                 size_t x = atoi(val);
-                if(x > 0) { globals.cfg_rt_mem_limit = x * 1024 * 1024; }
+                if(x > 0) globals.cfg_rt_mem_limit = x * 1024 * 1024;
+            } else if(!strcasecmp(var, "use-std")) {
+                if(val) globals.fl_use_std = switch_true(val);
             }
         }
     }

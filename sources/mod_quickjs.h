@@ -9,6 +9,7 @@
 #include <switch.h>
 #include <switch_stun.h>
 #include <switch_curl.h>
+#include <dlfcn.h>
 #include <quickjs.h>
 #include <quickjs-libc.h>
 
@@ -28,16 +29,18 @@
 
 #define MOD_QUICKJS_DEBUG
 
+typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx, const char *module_name);
 
 typedef struct {
     switch_mutex_t          *mutex;
     switch_mutex_t          *mutex_scripts_map;
     switch_hash_t           *scripts_map;
+    uint32_t                active_threads;
     size_t                  cfg_rt_mem_limit;
     size_t                  cfg_rt_stk_size;
     uint8_t                 fl_ready;
     uint8_t                 fl_shutdown;
-    int                     active_threads;
+    uint8_t                 fl_use_std;
 } globals_t;
 
 typedef struct {
@@ -81,5 +84,8 @@ uint32_t script_sem_take(script_t *script);
 void script_sem_release(script_t *script);
 void script_wait_unlock(script_t *script);
 script_t *script_lookup(char *id);
+
+/* quickjs */
+int has_suffix(const char *str, const char *suffix);
 
 #endif

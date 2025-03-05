@@ -3,6 +3,7 @@
         <!-- mbytes (0 - no limits) -->
         <param name="rt-memory-limit" value="0" />
         <param name="rt-stack-size-max" value="0" />
+        <param name="use-std" value="false" />
     </settings>
 
     <autoload-scripts>
@@ -11,6 +12,6 @@
 	<script path="script2.js" args=""/>
 	-->
     </autoload-scripts>
-    
+
 </configuration>
 

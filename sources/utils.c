@@ -24,7 +24,7 @@ void launch_thread(switch_memory_pool_t *pool, switch_thread_start_t fun, void *
 
 void thread_finished() {
     switch_mutex_lock(globals.mutex);
-    if(globals.active_threads > 0) { globals.active_threads--; }
+    if(globals.active_threads) globals.active_threads--;
     switch_mutex_unlock(globals.mutex);
 }
 
@@ -228,4 +228,3 @@ out:
     }
     return file_name;
 }
-

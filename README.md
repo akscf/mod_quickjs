@@ -3,8 +3,12 @@
 </p>
 
 ## version 1.7
+ - added configuration option 'use_std' for enabling functions from std/os modules <br>
+ - added 'import' function for laoding so/js modules (see examples/dyn_module) <br> 
+ - added DBH class for interaction with  freeswitch DBH <br>
  - many changes in Session (speech detection, etc) <br>
  - IVS class was removed <br>
+ - odbc was removed <br>
  - ... in develooping ...
     
 ## version 1.6

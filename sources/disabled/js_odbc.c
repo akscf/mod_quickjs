@@ -224,7 +224,7 @@ static JSValue js_odbc_get_data(JSContext *ctx, JSValueConst this_val, int argc,
         SQLDescribeCol(js_odbc->stmt, i, name, sizeof(name), &NameLength, &DataType, &ColumnSize, &DecimalDigits, &Nullable);
         SQLGetData(js_odbc->stmt, i, SQL_C_CHAR, js_odbc->colbuf, js_odbc->colbufsz, NULL);
 
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "COLMN: %s => %s\n", (char *)name, (char *)data);
+        //switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "COLMN: %s => %s\n", (char *)name, (char *)data);
         JS_SetPropertyStr(ctx, row_data, name, JS_NewString(ctx, data));
     }
 
@@ -284,6 +284,7 @@ static void js_odbc_finalizer(JSRuntime *rt, JSValue val) {
     js_free_rt(rt, js_odbc);
 }
 
+// new(dsn, [username, password])
 static JSValue js_odbc_contructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
     JSValue obj = JS_UNDEFINED;
     JSValue err = JS_UNDEFINED;
@@ -293,20 +294,16 @@ static JSValue js_odbc_contructor(JSContext *ctx, JSValueConst new_target, int a
     switch_odbc_handle_t *db = NULL;
     const char *dsn = NULL, *username = NULL, *password = NULL;
 
-    if(argc < 1) {
-        return JS_ThrowTypeError(ctx, "Not enough arguments");
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "new ODBC(dsn, [username, password])");
     }
 
-    if(QJS_IS_NULL(argv[0])) {
-        return JS_ThrowTypeError(ctx, "Invalid argument: dsn");
-    }
     dsn = JS_ToCString(ctx, argv[0]);
-
-    if(argc > 1) {
-        username = (QJS_IS_NULL(argv[1]) ? NULL : JS_ToCString(ctx, argv[1]));
+    if(argc > 1 && !QJS_IS_NULL(argv[1])) {
+        username = JS_ToCString(ctx, argv[1]);
     }
-    if(argc > 2) {
-        password = (QJS_IS_NULL(argv[2]) ? NULL : JS_ToCString(ctx, argv[2]));
+    if(argc > 2 && !QJS_IS_NULL(argv[2])) {
+        password = JS_ToCString(ctx, argv[2]);
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
@@ -331,8 +328,8 @@ static JSValue js_odbc_contructor(JSContext *ctx, JSValueConst new_target, int a
     js_odbc->dsn = switch_core_strdup(pool, dsn);
     js_odbc->username = (username ? switch_core_strdup(pool, username) : NULL);
     js_odbc->password = (password ? switch_core_strdup(pool, password) : NULL);
-    js_odbc->colbufsz = 1024;
     js_odbc->colbuf = switch_core_alloc(pool, js_odbc->colbufsz);
+    js_odbc->colbufsz = 1024;
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
