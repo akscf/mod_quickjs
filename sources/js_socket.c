@@ -407,7 +407,7 @@ static const JSCFunctionListEntry js_socket_proto_funcs[] = {
 };
 
 static void js_socket_finalizer(JSRuntime *rt, JSValue val) {
-    js_socket_t *js_socket = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
+    js_socket_t *js_socket = JS_GetOpaque(val, js_socket_get_classid2(rt));
 
     if(!js_socket) {
         return;
@@ -572,23 +572,33 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+JSClassID js_socket_get_classid2(JSRuntime *rt) {
+    script_t *script = JS_GetRuntimeOpaque(rt);
+    switch_assert(script);
+    return script->class_id_socket;
+}
 JSClassID js_socket_get_classid(JSContext *ctx) {
-    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
+    return  js_socket_get_classid2(JS_GetRuntime(ctx));
 }
 
-switch_status_t js_socket_class_register(JSContext *ctx, JSValue global_obj) {
-    JSClassID class_id = 0;
+switch_status_t js_socket_class_register(JSContext *ctx, JSValue global_obj, JSClassID class_id) {
     JSValue obj_proto, obj_class;
+    script_t *script = JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
 
-    class_id = js_socket_get_classid(ctx);
-    if(!class_id) {
-        JS_NewClassID(&class_id);
-        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_socket_class);
+    switch_assert(script);
 
-        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
-        }
+    if(JS_IsRegisteredClass(JS_GetRuntime(ctx), class_id)) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Class with id (%d) already registered!\n", class_id);
+        return SWITCH_STATUS_FALSE;
     }
+
+    JS_NewClassID(&class_id);
+    JS_NewClass(JS_GetRuntime(ctx), class_id, &js_socket_class);
+    script->class_id_socket = class_id;
+
+#ifdef MOD_QUICKJS_DEBUG
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Class registered [%s / %d]\n", CLASS_NAME, class_id);
+#endif
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_socket_proto_funcs, ARRAY_SIZE(js_socket_proto_funcs));

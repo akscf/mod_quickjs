@@ -48,7 +48,8 @@ typedef struct {
 
 /* js_curl.c */
 JSClassID js_curl_get_classid(JSContext *ctx);
-switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj);
+JSClassID js_curl_get_classid2(JSRuntime *rt);
+switch_status_t js_curl_class_register(JSContext *ctx, JSValue global_obj, JSClassID class_id);
 
 /* js_curl_misc.c */
 switch_status_t js_curl_result_alloc(js_curl_result_t **result, uint32_t http_code, uint8_t *body, uint32_t body_len);

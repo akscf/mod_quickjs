@@ -58,13 +58,27 @@ typedef struct {
     const char              *session_id;
     switch_memory_pool_t    *pool;
     switch_mutex_t          *mutex;
-    switch_mutex_t          *classes_map_mutex;
-    switch_hash_t           *classes_map;
     switch_core_session_t   *session;
     JSContext               *ctx;
     JSRuntime               *rt;
     void                    *opaque;
+    // builtin classes
+    JSClassID               class_id_codec;
+    JSClassID               class_id_coredb;
+    JSClassID               class_id_curl;
+    JSClassID               class_id_dbh;
+    JSClassID               class_id_event;
+    JSClassID               class_id_eventhandler;
+    JSClassID               class_id_file;
+    JSClassID               class_id_filehandle;
+    JSClassID               class_id_session;
+    JSClassID               class_id_socket;
+    JSClassID               class_id_xml;
 } script_t;
+
+typedef struct {
+    JSClassID   id;
+} class_id_t;
 
 /* utils.c */
 char *safe_pool_strdup(switch_memory_pool_t *pool, const char *str);
@@ -73,11 +87,7 @@ uint8_t *safe_pool_bufdup(switch_memory_pool_t *pool, uint8_t *buffer, switch_si
 void launch_thread(switch_memory_pool_t *pool, switch_thread_start_t fun, void *data);
 void thread_finished();
 
-char *audio_file_write(switch_byte_t *buf, uint32_t buf_len, uint32_t samplerate, uint32_t channels, const char *file_ext);
-
 void js_ctx_dump_error(script_t *script, JSContext *ctx);
-switch_status_t js_register_classid(JSRuntime *rt, const char *class_name, JSClassID class_id);
-JSClassID js_lookup_classid(JSRuntime *rt, const char *class_name);
 
 switch_status_t new_uuid(char **uuid, switch_memory_pool_t *pool);
 uint32_t script_sem_take(script_t *script);

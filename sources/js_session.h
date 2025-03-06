@@ -31,8 +31,10 @@ typedef struct {
 } js_session_t;
 
 /* js_session.c */
-JSClassID js_seesion_get_classid(JSContext *ctx);
-switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj);
+JSClassID js_session_get_classid(JSContext *ctx);
+JSClassID js_session_get_classid2(JSRuntime *rt);
+switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj, JSClassID class_id);
+
 JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session);
 JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 

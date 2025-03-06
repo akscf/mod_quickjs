@@ -521,6 +521,7 @@ static switch_status_t script_load(script_t *script) {
     }
 
     script->script_buf[script->script_len] = '\0';
+
 out:
     if(fd) {
         switch_file_close(fd);
@@ -548,19 +549,19 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     } else {
         script_path_local = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.script_dir, SWITCH_PATH_SEPARATOR, script_name);
         if(switch_file_exists(script_path_local, NULL) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "File not found: %s\n", script_path_local);
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "File not found (%s)\n", script_path_local);
             status = SWITCH_STATUS_FALSE;
             goto out;
         }
     }
 
     if(switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_new_memory_pool()\n");
         status = SWITCH_STATUS_MEMERR;
         goto out;
     }
     if((script = switch_core_alloc(pool, sizeof(script_t))) == NULL)  {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "mem fail\n");
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_alloc()\n");
         status = SWITCH_STATUS_MEMERR;
         goto out;
     }
@@ -578,15 +579,15 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     script->session_id = (session ? switch_core_session_get_uuid(session) : NULL);
     script->session = session;
 
-    switch_core_hash_init(&script->classes_map);
     switch_mutex_init(&script->mutex, SWITCH_MUTEX_NESTED, pool);
-    switch_mutex_init(&script->classes_map_mutex, SWITCH_MUTEX_NESTED, pool);
 
     status = script_load(script);
     if(status != SWITCH_STATUS_SUCCESS) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unable to load script\n");
         goto out;
     }
+
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "script-id (%s) [%s]\n", script->id, script->name);
 
     switch_mutex_lock(globals.mutex_scripts_map);
     switch_core_hash_insert(globals.scripts_map, script->id, script);
@@ -616,7 +617,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     switch_status_t status = SWITCH_STATUS_SUCCESS;
     JSContext *ctx = NULL;
     JSRuntime *rt = NULL;
-    JSValue global_obj, session_obj, script_obj, runtime_obj, argc_obj, argv_obj, flags_obj;
+    JSValue global_obj, session_obj, script_obj, runtime_obj, argc_obj, argv_obj;
     JSValue result;
 
     if(script->fl_destroyed || globals.fl_shutdown) {
@@ -653,22 +654,18 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 
     /* register classes */
     script->fl_ready = true; // temporary
-    js_session_class_register(ctx, global_obj);
-    js_codec_class_register(ctx, global_obj);
-    js_file_handle_class_register(ctx, global_obj);
-    js_event_class_register(ctx, global_obj);
-    js_file_class_register(ctx, global_obj);
-    js_socket_class_register(ctx, global_obj);
-    js_coredb_class_register(ctx, global_obj);
-    js_eventhandler_class_register(ctx, global_obj);
-    js_xml_class_register(ctx, global_obj);
-    js_curl_class_register(ctx, global_obj);
-    js_dbh_class_register(ctx, global_obj);
-
+    js_session_class_register(ctx, global_obj, 1000);
+    js_codec_class_register(ctx, global_obj, 1001);
+    js_file_handle_class_register(ctx, global_obj, 1002);
+    js_event_class_register(ctx, global_obj, 1003);
+    js_file_class_register(ctx, global_obj, 1004);
+    js_socket_class_register(ctx, global_obj, 1005);
+    js_coredb_class_register(ctx, global_obj, 1006);
+    js_eventhandler_class_register(ctx, global_obj, 1007);
+    js_xml_class_register(ctx, global_obj, 1008);
+    js_curl_class_register(ctx, global_obj, 1009);
+    js_dbh_class_register(ctx, global_obj, 10010);
     script->fl_ready = false; // clear
-
-    flags_obj = JS_NewObject(ctx);
-    JS_SetPropertyStr(ctx, global_obj, "flags", flags_obj);
 
     runtime_obj = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, runtime_obj, "type", JS_NewString(ctx, MOD_RT_TYPE));
@@ -688,10 +685,10 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
 
     /* arguments */
     if(!zstr(script->args)) {
-        char *argv[512] = { 0 };
+        char *argv[32] = { 0 };
         int argc = 0;
 
-        argc = switch_separate_string(script->args, ' ', argv, (sizeof(argv) / sizeof(argv[0])));
+        argc = switch_separate_string(script->args, ' ', argv, ARRAY_SIZE(argv));
         argc_obj = JS_NewInt32(ctx, argc);
         argv_obj = JS_NewArray(ctx);
 
@@ -768,17 +765,13 @@ out:
     /* Otherwise it corrupts js_session                         */
     script->fl_ready = false;
 
-    script->rt = NULL;
-    script->ctx = NULL;
-
     switch_mutex_lock(globals.mutex_scripts_map);
     switch_core_hash_delete(globals.scripts_map, script->id);
     switch_mutex_unlock(globals.mutex_scripts_map);
 
-    switch_core_hash_destroy(&script->classes_map);
-
-    switch_core_destroy_memory_pool(&pool);
-
+    if(pool) {
+        switch_core_destroy_memory_pool(&pool);
+    }
     if(thread) {
         thread_finished();
     }

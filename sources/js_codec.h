@@ -19,7 +19,9 @@ typedef struct {
 } js_codec_t;
 
 JSClassID js_codec_get_classid(JSContext *ctx);
-switch_status_t js_codec_class_register(JSContext *ctx, JSValue global_obj);
+JSClassID js_codec_get_classid2(JSRuntime *rt);
+switch_status_t js_codec_class_register(JSContext *ctx, JSValue global_obj, JSClassID class_id);
+
 JSValue js_codec_from_session_wcodec(JSContext *ctx, switch_core_session_t *session);
 JSValue js_codec_from_session_rcodec(JSContext *ctx, switch_core_session_t *session);
 

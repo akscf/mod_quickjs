@@ -82,7 +82,7 @@ static switch_status_t sys_session_hangup_hook(switch_core_session_t *session);
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_caller_profile_t *caller_profile = NULL;
     switch_channel_t *channel = NULL;
 
@@ -204,7 +204,7 @@ static JSValue js_session_property_get(JSContext *ctx, JSValueConst this_val, in
 }
 
 static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JSValue val, int magic) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -244,7 +244,7 @@ static JSValue js_session_property_set(JSContext *ctx, JSValueConst this_val, JS
 }
 
 static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -270,7 +270,7 @@ static JSValue js_session_set_hangup_hook(JSContext *ctx, JSValueConst this_val,
 
 // speak(text, [eventsHandler, handlerData])
 static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *text = NULL;
     const char *tts_engine = NULL;
     const char *tts_language = NULL;
@@ -319,7 +319,7 @@ static JSValue  js_session_speak(JSContext *ctx, JSValueConst this_val, int argc
 
 // speakEx(engine, language, text, [eventsHandler, handlerData])
 static JSValue  js_session_speak_ex(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *text = NULL;
     const char *tts_engine = NULL;
     const char *ch_tts_engine = NULL;
@@ -378,7 +378,7 @@ static JSValue  js_session_speak_ex(JSContext *ctx, JSValueConst this_val, int a
 
 // sayPhrase(phraseName, phraseData, phraseLang, eventsHandler, handlerData)
 static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *phrase_name = NULL, *phrase_data = NULL, *phrase_lang = NULL;
     input_callback_state_t cb_state = { 0 };
     switch_input_args_t args = { 0 };
@@ -419,7 +419,7 @@ static JSValue js_session_say_phrase(JSContext *ctx, JSValueConst this_val, int 
 
 // playback(fileName, [skipSmps, eventsHandler, handlerData])
 static JSValue js_session_playback(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     char *file_obj_fname = NULL;
     const char *file_name = NULL;
     const char *prebuf = NULL;
@@ -480,7 +480,7 @@ static JSValue js_session_playback(JSContext *ctx, JSValueConst this_val, int ar
 
 // playbackStop()
 static JSValue js_session_playback_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -495,7 +495,7 @@ static JSValue js_session_playback_stop(JSContext *ctx, JSValueConst this_val, i
 
 // bgPlaybackStart(fileName)
 static JSValue js_session_bg_playback_start(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     char *js_obj_fname = NULL;
     const char *fname = NULL;
     js_file_t *js_file = NULL;
@@ -525,7 +525,7 @@ static JSValue js_session_bg_playback_start(JSContext *ctx, JSValueConst this_va
 
 // bgPlaybackCtl(pause|resume)
 static JSValue js_session_bg_playback_ctl(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *action = NULL;
     JSValue result = JS_FALSE;
 
@@ -553,7 +553,7 @@ static JSValue js_session_bg_playback_ctl(JSContext *ctx, JSValueConst this_val,
 
 // bgPlaybackStop()
 static JSValue js_session_bg_playback_stop(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -566,7 +566,7 @@ static JSValue js_session_bg_playback_stop(JSContext *ctx, JSValueConst this_val
 
 // playAndGetDigits(min_digits, max_digits, max_tries ,timeout, terminators, audio_file, bad_audio_file, [digits_regex, var_name, digit_timeout, transfer_on_failure])
 static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     char buf[513] = { 0 };
     uint32_t buf_len = (sizeof(buf) - 1);
     uint32_t min_digits = 0, max_digits = 0, max_tries = 0, timeout = 0, digit_timeout = 0;
@@ -628,7 +628,7 @@ static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_
 
 // playAndDetectSpeech(fileToPlay, [timeout, asrExtraParam, eventsHandler, handlerData])
 static JSValue js_session_play_and_detect_speech(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     input_callback_state_t cb_state = { 0 };
     switch_input_args_t args = { 0 };
     switch_status_t status = 0;
@@ -694,7 +694,7 @@ static JSValue js_session_play_and_detect_speech(JSContext *ctx, JSValueConst th
 
 // sayAndDetectSpeech(textToSpeech, [timeout, asrExtraParam, eventsHandler, handlerData])
 static JSValue js_session_say_and_detect_speech(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     input_callback_state_t cb_state = { 0 };
     switch_input_args_t args = { 0 };
     switch_status_t status = 0;
@@ -766,7 +766,7 @@ static JSValue js_session_say_and_detect_speech(JSContext *ctx, JSValueConst thi
 
 // detectSpeech([timeout, asrExtraParam, eventsHandler, handlerData])
 static JSValue js_session_detect_speech(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     input_callback_state_t cb_state = { 0 };
     switch_input_args_t args = { 0 };
     switch_status_t status = 0;
@@ -824,7 +824,7 @@ static JSValue js_session_detect_speech(JSContext *ctx, JSValueConst this_val, i
 
 // detectSpeechEx(asrEngine, [timeout, asrExtraParam, eventsHandler, handlerData])
 static JSValue js_session_detect_speech_ex(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     input_callback_state_t cb_state = { 0 };
     switch_input_args_t args = { 0 };
     switch_status_t status = 0;
@@ -892,7 +892,7 @@ static JSValue js_session_detect_speech_ex(JSContext *ctx, JSValueConst this_val
 
 // recordFile(fileName, [limitSec, threshold, silinceHits, eventsHandler, handlerData])
 static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     char *file_obj_fname = NULL;
     const char *file_name = NULL;
     input_callback_state_t cb_state = { 0 };
@@ -951,7 +951,7 @@ static JSValue js_session_record_file(JSContext *ctx, JSValueConst this_val, int
 
 // collectInput(dtmfCallback, [udata, absTimeout, digitTimeout])
 static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     input_callback_state_t cb_state = { 0 };
     switch_input_args_t args = { 0 };
     uint32_t abs_timeout = 0, digit_timeout = 0;
@@ -986,7 +986,7 @@ static JSValue js_session_collect_input(JSContext *ctx, JSValueConst this_val, i
 }
 
 static JSValue js_session_flush_events(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_event_t *event;
 
     SESSION_SANITY_CHECK();
@@ -998,7 +998,7 @@ static JSValue js_session_flush_events(JSContext *ctx, JSValueConst this_val, in
 }
 
 static JSValue js_session_flush_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -1009,7 +1009,7 @@ static JSValue js_session_flush_digits(JSContext *ctx, JSValueConst this_val, in
 
 // setVariable(name, value)
 static JSValue js_session_set_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *var, *val;
 
     SESSION_SANITY_CHECK();
@@ -1031,7 +1031,7 @@ static JSValue js_session_set_var(JSContext *ctx, JSValueConst this_val, int arg
 
 // getVariable(name)
 static JSValue js_session_get_var(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *var, *val;
 
     SESSION_SANITY_CHECK();
@@ -1058,7 +1058,7 @@ static JSValue js_session_get_var(JSContext *ctx, JSValueConst this_val, int arg
 }
 
 static JSValue js_session_get_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *terminators = NULL;
     char buf[513] = { 0 };
     uint32_t digits = 0, timeout = 5000, digit_timeout = 0, abs_timeout = 0;
@@ -1098,7 +1098,7 @@ static JSValue js_session_get_digits(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_session_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -1108,7 +1108,7 @@ static JSValue js_session_answer(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_session_pre_answer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_channel_t *channel = NULL;
 
     SESSION_SANITY_CHECK();
@@ -1119,7 +1119,7 @@ static JSValue js_session_pre_answer(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_session_generate_xml_cdr(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_xml_t cdr = NULL;
     JSValue result = JS_UNDEFINED;
 
@@ -1136,7 +1136,7 @@ static JSValue js_session_generate_xml_cdr(JSContext *ctx, JSValueConst this_val
 }
 
 static JSValue js_session_get_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_event_t *event = NULL;
 
     SESSION_SANITY_CHECK();
@@ -1150,7 +1150,7 @@ static JSValue js_session_get_event(JSContext *ctx, JSValueConst this_val, int a
 
 // (jsEvent)
 static JSValue js_session_put_event(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -1170,7 +1170,7 @@ static JSValue js_session_put_event(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_session_hangup(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_channel_t *channel = NULL;
     const char *cause_name = NULL;
     switch_call_cause_t cause = SWITCH_CAUSE_NORMAL_CLEARING;
@@ -1200,7 +1200,7 @@ static JSValue js_session_hangup(JSContext *ctx, JSValueConst this_val, int argc
 }
 
 static JSValue js_session_execute(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_channel_t *channel = NULL;
     JSValue result = JS_FALSE;
 
@@ -1232,7 +1232,7 @@ static JSValue js_session_execute(JSContext *ctx, JSValueConst this_val, int arg
 
 // sleep(msec, [cbHook])
 static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_channel_t *channel = NULL;
     input_callback_state_t cb_state = { 0 };
     switch_input_args_t args = { 0 };
@@ -1269,7 +1269,7 @@ static JSValue js_session_sleep(JSContext *ctx, JSValueConst this_val, int argc,
 }
 
 static JSValue js_session_gen_tones(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_channel_t *channel = NULL;
     input_callback_state_t cb_state = { 0 };
         switch_input_args_t args = { 0 };
@@ -1320,7 +1320,7 @@ static JSValue js_session_gen_tones(JSContext *ctx, JSValueConst this_val, int a
 }
 
 static JSValue js_session_get_read_codec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -1328,7 +1328,7 @@ static JSValue js_session_get_read_codec(JSContext *ctx, JSValueConst this_val, 
 }
 
 static JSValue js_session_get_write_codec(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
 
     SESSION_SANITY_CHECK();
 
@@ -1336,7 +1336,7 @@ static JSValue js_session_get_write_codec(JSContext *ctx, JSValueConst this_val,
 }
 
 static JSValue js_session_frame_read(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_status_t status;
     switch_frame_t *read_frame = NULL;
     switch_size_t buf_size = 0;
@@ -1364,7 +1364,7 @@ static JSValue js_session_frame_read(JSContext *ctx, JSValueConst this_val, int 
 }
 
 static JSValue js_session_frame_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_seesion_get_classid(ctx));
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     switch_codec_t *wcodec = NULL;
     switch_frame_t write_frame = { 0 };
     switch_status_t status;
@@ -1576,7 +1576,7 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
 };
 
 static void js_session_finalizer(JSRuntime *rt, JSValue val) {
-    js_session_t *jss = JS_GetOpaque(val, js_lookup_classid(rt, CLASS_NAME));
+    js_session_t *jss = JS_GetOpaque(val, js_session_get_classid2(rt));
     uint8_t fl_wloop = false;
 
     if(!jss) {
@@ -1664,7 +1664,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
         }
     } else {
         if(argc > 1 && JS_IsObject(argv[1])) {
-            jss_old = JS_GetOpaque2(ctx, argv[1], js_seesion_get_classid(ctx));
+            jss_old = JS_GetOpaque2(ctx, argv[1], js_session_get_classid(ctx));
         }
         if(argc > 2)  {
             JS_ToInt32(ctx, &tosec, argv[2]);
@@ -1687,7 +1687,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
             proto = JS_GetPropertyStr(ctx, new_target, "prototype");
             if(JS_IsException(proto)) { goto fail; }
 
-            obj = JS_NewObjectProtoClass(ctx, proto, js_seesion_get_classid(ctx));
+            obj = JS_NewObjectProtoClass(ctx, proto, js_session_get_classid(ctx));
             JS_FreeValue(ctx, proto);
             if(JS_IsException(obj)) { goto fail; }
 
@@ -1704,7 +1704,7 @@ static JSValue js_session_contructor(JSContext *ctx, JSValueConst new_target, in
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_seesion_get_classid(ctx));
+    obj = JS_NewObjectProtoClass(ctx, proto, js_session_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { goto fail; }
 
@@ -1746,23 +1746,33 @@ fail:
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-JSClassID js_seesion_get_classid(JSContext *ctx) {
-    return js_lookup_classid(JS_GetRuntime(ctx), CLASS_NAME);
+JSClassID js_session_get_classid2(JSRuntime *rt) {
+    script_t *script = JS_GetRuntimeOpaque(rt);
+    switch_assert(script);
+    return script->class_id_session;
+}
+JSClassID js_session_get_classid(JSContext *ctx) {
+    return  js_session_get_classid2(JS_GetRuntime(ctx));
 }
 
-switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj) {
-    JSClassID class_id = 0;
+switch_status_t js_session_class_register(JSContext *ctx, JSValue global_obj, JSClassID class_id) {
     JSValue obj_proto, obj_class;
+    script_t *script = JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
 
-    class_id = js_seesion_get_classid(ctx);
-    if(!class_id) {
-        JS_NewClassID(&class_id);
-        JS_NewClass(JS_GetRuntime(ctx), class_id, &js_session_class);
+    switch_assert(script);
 
-        if(js_register_classid(JS_GetRuntime(ctx), CLASS_NAME, class_id) != SWITCH_STATUS_SUCCESS) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Couldn't register class: %s (%i)\n", CLASS_NAME, (int) class_id);
-        }
+    if(JS_IsRegisteredClass(JS_GetRuntime(ctx), class_id)) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Class with id (%d) already registered!\n", class_id);
+        return SWITCH_STATUS_FALSE;
     }
+
+    JS_NewClassID(&class_id);
+    JS_NewClass(JS_GetRuntime(ctx), class_id, &js_session_class);
+    script->class_id_session = class_id;
+
+#ifdef MOD_QUICKJS_DEBUG
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Class registered [%s / %d]\n", CLASS_NAME, class_id);
+#endif
 
     obj_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, obj_proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));
@@ -1791,7 +1801,7 @@ JSValue js_session_object_create(JSContext *ctx, switch_core_session_t *session)
     if(JS_IsException(proto)) { return proto; }
     JS_SetPropertyFunctionList(ctx, proto, js_session_proto_funcs, ARRAY_SIZE(js_session_proto_funcs));
 
-    obj = JS_NewObjectProtoClass(ctx, proto, js_seesion_get_classid(ctx));
+    obj = JS_NewObjectProtoClass(ctx, proto, js_session_get_classid(ctx));
     JS_FreeValue(ctx, proto);
     if(JS_IsException(obj)) { return obj; }
 
@@ -1835,7 +1845,7 @@ JSValue js_session_ext_bridge(JSContext *ctx, JSValueConst this_val, int argc, J
         return JS_ThrowTypeError(ctx, "Not enough arguments");
     }
 
-    class_id = js_seesion_get_classid(ctx);
+    class_id = js_session_get_classid(ctx);
 
     jss_a = JS_GetOpaque(argv[0], class_id);
     if(!(jss_a && jss_a->session)) {

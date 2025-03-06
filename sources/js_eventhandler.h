@@ -16,7 +16,8 @@ typedef struct {
 } js_eventhandler_t;
 
 JSClassID js_eventhandler_get_classid(JSContext *ctx);
-switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_obj);
+JSClassID js_eventhandler_get_classid2(JSRuntime *rt);
+switch_status_t js_eventhandler_class_register(JSContext *ctx, JSValue global_obj, JSClassID class_id);
 
 #endif
 

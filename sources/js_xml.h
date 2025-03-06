@@ -12,7 +12,8 @@ typedef struct {
 } js_xml_t;
 
 JSClassID js_xml_get_classid(JSContext *ctx);
-switch_status_t js_xml_class_register(JSContext *ctx, JSValue global_obj);
+JSClassID js_xml_get_classid2(JSRuntime *rt);
+switch_status_t js_xml_class_register(JSContext *ctx, JSValue global_obj, JSClassID class_id);
 
 #endif
 
