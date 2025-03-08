@@ -9,7 +9,8 @@
 #define PROP_CONNECTED  2
 #define PROP_LAST_ERROR 3
 
-#define DBH_SANITY_CHECK() if (!js_dbh) { return JS_ThrowTypeError(ctx, "DBH is not initialized"); }
+#define DBH_SANITY_CHECK()  if (!js_dbh) { return JS_ThrowTypeError(ctx, "DBH is not initialized"); }
+#define CONN_SANITY_CHECK() if (!js_dbh->dbh) { return JS_ThrowTypeError(ctx, "No database connection"); }
 
 typedef struct {
     js_dbh_t        *js_dbh;
@@ -86,6 +87,7 @@ static JSValue js_dbh_test_reactive(JSContext *ctx, JSValueConst this_val, int a
     JSValue result = JS_FALSE;
 
     DBH_SANITY_CHECK();
+    CONN_SANITY_CHECK();
 
     if(argc < 3 || QJS_IS_NULL(argv[0]) || QJS_IS_NULL(argv[2])) {
         return JS_ThrowTypeError(ctx, "testReactive(testSql, dropSql, reactiveSql)");
@@ -110,6 +112,7 @@ static JSValue js_dbh_affected_rows(JSContext *ctx, JSValueConst this_val, int a
     js_dbh_t *js_dbh = JS_GetOpaque2(ctx, this_val, js_dbh_get_classid(ctx));
 
     DBH_SANITY_CHECK();
+    CONN_SANITY_CHECK();
 
     return JS_NewInt32(ctx, switch_cache_db_affected_rows(js_dbh->dbh));
 }
@@ -121,6 +124,7 @@ static JSValue js_dbh_load_extensions(JSContext *ctx, JSValueConst this_val, int
     JSValue result = JS_FALSE;
 
     DBH_SANITY_CHECK();
+    CONN_SANITY_CHECK();
 
     if(!argc || QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "loadExtension(name)");
@@ -156,6 +160,7 @@ static JSValue js_dbh_exec_query(JSContext *ctx, JSValueConst this_val, int argc
     JSValue result = JS_FALSE;
 
     DBH_SANITY_CHECK();
+    CONN_SANITY_CHECK();
 
     if(!argc || QJS_IS_NULL(argv[0])) {
         return JS_ThrowTypeError(ctx, "execQuery(query, [callback, callbackData])");
@@ -251,10 +256,9 @@ static JSValue js_dbh_contructor(JSContext *ctx, JSValueConst new_target, int ar
     }
 
     if(switch_cache_db_get_db_handle_dsn(&dbh, dsn) != SWITCH_STATUS_SUCCESS) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_cache_db_get_db_handle_dsn()\n");
-        goto fail;
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "switch_cache_db_get_db_handle_dsn()\n");
+        dbh = NULL;
     }
-
 
     js_dbh = js_mallocz(ctx, sizeof(js_dbh_t));
     if(!js_dbh) {
