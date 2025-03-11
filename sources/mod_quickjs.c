@@ -484,7 +484,13 @@ JSModuleDef *xxx_module_loader(JSContext *ctx, const char *module_name, void *op
     if (has_suffix(module_name, ".so")) {
         m = xxx_so_module_loader(ctx, module_name);
     } else {
-        m = xxx_js_module_loader(ctx, module_name);
+        if(!strcasecmp(module_name, "std")) {
+            m = js_init_module_std(ctx, "std");
+        } else if(!strcasecmp(module_name, "os")) {
+            m = js_init_module_os(ctx, "os");
+        } else {
+            m = xxx_js_module_loader(ctx, module_name);
+        }
     }
 
     return m;
@@ -725,11 +731,6 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "getPath", JS_NewCFunction(ctx, js_get_path, "getPath", 1));
     JS_SetPropertyStr(ctx, global_obj, "getUUID", JS_NewCFunction(ctx, js_get_uuid, "getUUID", 1));
 
-    if(globals.fl_use_std) {
-        js_init_module_std(ctx, "std");
-        js_init_module_os(ctx, "os");
-    }
-
     if(script->session) {
         script->fl_ready = true;
 
@@ -931,8 +932,6 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_quickjs_load) {
             } else if(!strcasecmp(var, "rt-memory-limit")) {
                 size_t x = atoi(val);
                 if(x > 0) globals.cfg_rt_mem_limit = x * 1024 * 1024;
-            } else if(!strcasecmp(var, "use-std")) {
-                if(val) globals.fl_use_std = switch_true(val);
             }
         }
     }

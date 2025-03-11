@@ -40,7 +40,6 @@ typedef struct {
     size_t                  cfg_rt_stk_size;
     uint8_t                 fl_ready;
     uint8_t                 fl_shutdown;
-    uint8_t                 fl_use_std;
 } globals_t;
 
 typedef struct {

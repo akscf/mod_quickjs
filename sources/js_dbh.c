@@ -25,7 +25,7 @@ static void js_dbh_finalizer(JSRuntime *rt, JSValue val);
 static int xxx_query_callback(void *pArg, int argc, char **argv, char **cargv) {
     query_callback_t *qcb = (query_callback_t *)pArg;
     JSContext *ctx = qcb->ctx;
-    JSValue args[1] = { 0 };
+    JSValue args[2] = { 0 };
     JSValue ret_val;
     JSValue row_data;
     int rr = 0;
@@ -34,9 +34,11 @@ static int xxx_query_callback(void *pArg, int argc, char **argv, char **cargv) {
     for(int i = 0; i < argc; i++) {
         JS_SetPropertyStr(ctx, row_data, switch_str_nil(cargv[i]), JS_NewString(ctx, switch_str_nil(argv[i])));
     }
-    args[0] = row_data;
 
-    ret_val = JS_Call(ctx, qcb->function, JS_UNDEFINED, 1, (JSValueConst *) args);
+    args[0] = row_data;
+    args[1] = qcb->arg;
+
+    ret_val = JS_Call(ctx, qcb->function, JS_UNDEFINED, 2, (JSValueConst *) args);
     if(JS_IsException(ret_val)) {
         js_ctx_dump_error(NULL, ctx);
         JS_ResetUncatchableError(ctx);
