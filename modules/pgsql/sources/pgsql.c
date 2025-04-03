@@ -184,6 +184,53 @@ static const char* field_type(PGresult* res, int field) {
     return type;
 }
 
+static JSValue js_xxmap(JSContext *ctx, JSValue tmap, const char *tname, char *tvalue) {
+    JSValue tte;
+    JSValue result;
+
+    if(zstr(tvalue)) {
+        return JS_NULL;
+    }
+
+    tte = JS_GetPropertyStr(ctx, tmap, tname);
+    if(!QJS_IS_NULL(tte)) {
+        if(JS_IsFunction(ctx, tte)) {
+            JSValue args[2] = { 0 };
+            args[0] = JS_NewString(ctx, tname);
+            args[1] = JS_NewString(ctx, tvalue);
+
+            result = JS_Call(ctx, tte, JS_UNDEFINED, 2, (JSValueConst *)args);
+            if(JS_IsException(result)) {
+                JS_ResetUncatchableError(ctx);
+            }
+
+            JS_FreeValue(ctx, args[0]);
+            JS_FreeValue(ctx, args[1]);
+        } else {
+            const char *ttname = JS_ToCString(ctx, tte);
+            if(!zstr(ttname)) {
+                if(!strcmp(ttname, "bool")) {
+                    result = !strcmp(tvalue, "true") ? JS_TRUE : JS_FALSE;
+                } else if(!strcmp(ttname, "int")) {
+                    result = JS_NewInt32(ctx, atoi(tvalue));
+                } else if(!strcmp(ttname, "float") || !strcmp(ttname, "double")) {
+                    result = JS_NewFloat64(ctx, strtod(tvalue, NULL));
+                } else {
+                    result = JS_NewString(ctx, tvalue);
+                }
+            } else {
+                result = JS_NewString(ctx, tvalue);
+            }
+            JS_FreeCString(ctx, ttname);
+        }
+    } else {
+        result = JS_NewString(ctx, tvalue);
+    }
+
+    JS_FreeValue(ctx, tte);
+    return result;
+}
+
 // --------------------------------------------------------------------------------------------------------------------------------------------------------------
 static JSValue js_pgsql_property_get(JSContext *ctx, JSValueConst this_val, int magic) {
     qjs_pgsql_t *js_pgsql = JS_GetOpaque2(ctx, this_val, js_pgsql_class_id);
@@ -257,10 +304,17 @@ static JSValue js_pgsql_exec_query(JSContext *ctx, JSValueConst this_val, int ar
                     char *name = PQfname(res, j);
                     char *value = PQgetvalue(res, i, j);
                     const char *type = field_type(res, j);
+                    JSValue mtype;
+
+                    if(!JS_IsUndefined(js_pgsql->tmap)) {
+                        mtype = js_xxmap(ctx, js_pgsql->tmap, type, value);
+                    } else {
+                        mtype = JS_NewString(ctx, value);
+                    }
 
                     JSValue col_val = JS_NewObject(ctx);
                     JS_SetPropertyStr(ctx, col_val, "type", JS_NewString(ctx, type));
-                    JS_SetPropertyStr(ctx, col_val, "value", JS_NewString(ctx, switch_str_nil(value)));
+                    JS_SetPropertyStr(ctx, col_val, "value", mtype);
                     JS_SetPropertyStr(ctx, row_data, name, col_val);
                 }
 
@@ -336,7 +390,7 @@ static void js_pgsql_finalizer(JSRuntime *rt, JSValue val) {
     js_free_rt(rt, js_pgsql);
 }
 
-// new Pgsql(dsn)
+// new Pgsql(dsn [, typeMmapping])
 static JSValue js_pgsql_ctor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv) {
     qjs_pgsql_t *js_pgsql = NULL;
     JSValue err = JS_UNDEFINED;
@@ -345,19 +399,30 @@ static JSValue js_pgsql_ctor(JSContext *ctx, JSValueConst new_target, int argc, 
     const char *dsn = NULL;
 
     if(argc < 1 || QJS_IS_NULL(argv[0])) {
-        return JS_ThrowTypeError(ctx, "Pgsql(dsn)");
+        return JS_ThrowTypeError(ctx, "Pgsql(dsn[, typeMaping])");
     }
 
-    dsn = JS_ToCString(ctx, argv[0]);
-    if(zstr(dsn)) {
-        return JS_ThrowTypeError(ctx, "Inavalid arguament: dsn");
+    if(JS_IsObject(argv[0])) {
+        //
+        // todo
+        //
+    } else {
+        dsn = JS_ToCString(ctx, argv[0]);
+        if(zstr(dsn)) {
+            return JS_ThrowTypeError(ctx, "Inavalid arguament: dsn");
+        }
     }
 
     js_pgsql = js_mallocz(ctx, sizeof(qjs_pgsql_t));
     if(!js_pgsql) { goto fail;  }
 
-    js_pgsql->dsn = js_strdup(ctx, dsn);
+    if(argc > 1 && !QJS_IS_NULL(argv[1]) && JS_IsObject(argv[1])) {
+        js_pgsql->tmap = argv[1];
+    } else {
+        js_pgsql->tmap = JS_UNDEFINED;
+    }
 
+    js_pgsql->dsn = js_strdup(ctx, dsn);
     js_pgsql->conn = PQconnectdb(js_pgsql->dsn);
     if(PQstatus(js_pgsql->conn) == CONNECTION_OK) {
         js_pgsql->fl_conntected = 1;

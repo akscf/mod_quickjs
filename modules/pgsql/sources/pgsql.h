@@ -35,6 +35,8 @@ typedef struct {
     PGconn      *conn;
     char        *dsn;
     uint8_t     fl_conntected;
+    uint32_t    fl_from_dbh;
+    JSValue     tmap;
 } qjs_pgsql_t;
 
 
