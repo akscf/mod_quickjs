@@ -376,11 +376,16 @@ static void js_pgsql_finalizer(JSRuntime *rt, JSValue val) {
     }
 
 #ifdef QJS_PGSQL_DEBUG
-    log_debug("qjs-pgsql-finalizer: js_pgsql=%p (conn=%p)\n", js_pgsql, js_pgsql->conn);
+    log_debug("qjs-pgsql-finalizer: js_pgsql=%p (conn=%p, dbh=%p)\n", js_pgsql, js_pgsql->conn, js_pgsql->dbh);
 #endif
 
-    if(js_pgsql->conn) {
-        PQfinish(js_pgsql->conn);
+    if(js_pgsql->dbh) {
+        switch_cache_db_handle_t *dbh = js_pgsql->dbh;
+        switch_cache_db_release_db_handle(&dbh);
+    } else {
+        if(js_pgsql->conn) {
+            PQfinish(js_pgsql->conn);
+        }
     }
 
     if(js_pgsql->dsn) {
@@ -402,15 +407,9 @@ static JSValue js_pgsql_ctor(JSContext *ctx, JSValueConst new_target, int argc, 
         return JS_ThrowTypeError(ctx, "Pgsql(dsn[, typeMaping])");
     }
 
-    if(JS_IsObject(argv[0])) {
-        //
-        // todo
-        //
-    } else {
-        dsn = JS_ToCString(ctx, argv[0]);
-        if(zstr(dsn)) {
-            return JS_ThrowTypeError(ctx, "Inavalid arguament: dsn");
-        }
+    dsn = JS_ToCString(ctx, argv[0]);
+    if(zstr(dsn)) {
+        return JS_ThrowTypeError(ctx, "Inavalid arguament: dsn");
     }
 
     js_pgsql = js_mallocz(ctx, sizeof(qjs_pgsql_t));
@@ -422,11 +421,28 @@ static JSValue js_pgsql_ctor(JSContext *ctx, JSValueConst new_target, int argc, 
         js_pgsql->tmap = JS_UNDEFINED;
     }
 
-    js_pgsql->dsn = js_strdup(ctx, dsn);
-    js_pgsql->conn = PQconnectdb(js_pgsql->dsn);
-    if(PQstatus(js_pgsql->conn) == CONNECTION_OK) {
-        js_pgsql->fl_conntected = 1;
+    if(strstr(dsn, "dbh:")) {
+#ifdef QJS_DBH_ENABLED
+        const char *p = dsn + 4;
+        switch_cache_db_handle_t *dbh = NULL;
+
+        js_pgsql->dsn = js_strdup(ctx, p);
+        if(switch_cache_db_get_db_handle_dsn(&dbh, p) == SWITCH_STATUS_SUCCESS) {
+            js_pgsql->conn = switch_cache_db_get_native_pg_conn(dbh);
+            js_pgsql->dbh = dbh;
+            js_pgsql->fl_conntected = 1;
+        }
+#else
+        return JS_ThrowTypeError(ctx, "Unsupported");
+#endif
+    } else {
+        js_pgsql->dsn = js_strdup(ctx, dsn);
+        js_pgsql->conn = PQconnectdb(js_pgsql->dsn);
+        if(PQstatus(js_pgsql->conn) == CONNECTION_OK) {
+            js_pgsql->fl_conntected = 1;
+        }
     }
+
 
     proto = JS_GetPropertyStr(ctx, new_target, "prototype");
     if(JS_IsException(proto)) { goto fail; }
@@ -438,7 +454,7 @@ static JSValue js_pgsql_ctor(JSContext *ctx, JSValueConst new_target, int argc, 
     JS_SetOpaque(obj, js_pgsql);
 
 #ifdef QJS_PGSQL_DEBUG
-    log_debug("qjs-pgsql-constructor: js_pgsql=%p (conn=%p)\n", js_pgsql, js_pgsql->conn);
+    log_debug("qjs-pgsql-constructor: js_pgsql=%p (conn=%p, dbh=%p)\n", js_pgsql, js_pgsql->conn, js_pgsql->dbh);
 #endif
 
     JS_FreeCString(ctx, dsn);

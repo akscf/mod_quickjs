@@ -19,6 +19,13 @@
 #define log_debug(fmt, ...) do{switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, fmt "\n", ##__VA_ARGS__);} while (0)
 #define log_error(fmt, ...) do{switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, fmt "\n", ##__VA_ARGS__);} while (0)
 
+//
+// this feature requires that path:
+// https://github.com/signalwire/freeswitch/compare/master...ar45:freeswitch:expose_pg_conn
+//
+// #define QJS_DBH_ENABLED
+
+
 #else
 
 #include <stdio.h>
@@ -32,10 +39,10 @@ static inline int _zstr(const char *s) { if(!s || *s == '\0') { return 1; } else
 
 
 typedef struct {
+    void        *dbh;
     PGconn      *conn;
     char        *dsn;
     uint8_t     fl_conntected;
-    uint32_t    fl_from_dbh;
     JSValue     tmap;
 } qjs_pgsql_t;
 

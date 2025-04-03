@@ -7,6 +7,7 @@ var tmap = {
     "int4" : function(type, val) { return parseInt(val); }
 };
 
+//var dbh = new Pgsql("dbh:pgsql://hostaddr=127.0.0.1 dbname=test user=test password=test", tmap);
 var dbh = new Pgsql("host=127.0.0.1 dbname=test user=test password=test", tmap);
 if(!dbh.isConnected) {
     console_log('err', "SQLError: " + dbh.error);
