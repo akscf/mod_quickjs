@@ -9,7 +9,6 @@
  - many changes in Session (speech detection, etc) <br>
  - IVS class was removed <br>
  - odbc was removed <br>
- - ... in develooping ...
     
 ## version 1.6
 Was an experimental version for testing some ideas
