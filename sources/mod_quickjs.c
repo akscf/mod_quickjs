@@ -393,6 +393,40 @@ static JSValue js_get_uuid(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     return JS_NewString(ctx, (char *)tmp_uuid);
 }
 
+// chatSend(protocol, from, to, message)
+static JSValue js_chat_send(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    script_t *script = JS_GetContextOpaque(ctx);
+    JSValue ret = JS_FALSE;
+    const char *proto = NULL;
+    const char *from = NULL;
+    const char *to = NULL;
+    const char *msg = NULL;
+
+    if(!script) {
+        return JS_UNDEFINED;
+    }
+
+    if(argc < 4 || QJS_IS_NULL(argv[0]) || QJS_IS_NULL(argv[1]) || QJS_IS_NULL(argv[2]) || QJS_IS_NULL(argv[3])) {
+        return JS_ThrowTypeError(ctx, "chatSend(protocol, from, to, message)");
+    }
+
+    proto = JS_ToCString(ctx, argv[0]);
+    from = JS_ToCString(ctx, argv[1]);
+    to = JS_ToCString(ctx, argv[2]);
+    msg = JS_ToCString(ctx, argv[3]);
+
+    if(switch_core_chat_send_args(proto, "global", from, to, "", msg, NULL, "", SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
+        ret = JS_TRUE;
+    }
+
+    JS_FreeCString(ctx, proto);
+    JS_FreeCString(ctx, from);
+    JS_FreeCString(ctx, to);
+    JS_FreeCString(ctx, msg);
+
+    return ret;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------------------
 static JSModuleDef *xxx_js_module_loader(JSContext *ctx, const char *module_name) {
     JSModuleDef *m = NULL;
@@ -730,6 +764,7 @@ static void *SWITCH_THREAD_FUNC script_thread(switch_thread_t *thread, void *obj
     JS_SetPropertyStr(ctx, global_obj, "getGlobalVariable", JS_NewCFunction(ctx, js_global_get, "getGlobalVariable", 2));
     JS_SetPropertyStr(ctx, global_obj, "getPath", JS_NewCFunction(ctx, js_get_path, "getPath", 1));
     JS_SetPropertyStr(ctx, global_obj, "getUUID", JS_NewCFunction(ctx, js_get_uuid, "getUUID", 1));
+    JS_SetPropertyStr(ctx, global_obj, "chatSend", JS_NewCFunction(ctx, js_chat_send, "chatSend", 1));
 
     if(script->session) {
         script->fl_ready = true;
