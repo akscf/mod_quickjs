@@ -1057,6 +1057,102 @@ static JSValue js_session_get_var(JSContext *ctx, JSValueConst this_val, int arg
     return JS_UNDEFINED;
 }
 
+// setChanFlag(name, true|false)
+static JSValue js_session_set_chan_flag(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
+    JSValue ret = JS_FALSE;
+    switch_channel_flag_t flag = CF_FLAG_MAX;
+    uint32_t val = 0;
+    const char *name;
+
+    SESSION_SANITY_CHECK();
+
+    if(argc < 1 || QJS_IS_NULL(argv[0]) || !JS_IsBool(argv[1])) {
+        return JS_ThrowTypeError(ctx, "setChanFlag(name, true|false)");
+    }
+
+    name = JS_ToCString(ctx, argv[0]);
+    val = JS_ToBool(ctx, argv[1]);
+
+    if(!strcasecmp(name, "CF_BREAK")) {
+        flag = CF_BREAK;
+    } else if(!strcasecmp(name, "CF_NO_RECOVER")) {
+        flag = CF_NO_RECOVER;
+    } else if(!strcasecmp(name, "CF_AUDIO_PAUSE_READ")) {
+        flag = CF_AUDIO_PAUSE_READ;
+    } else if(!strcasecmp(name, "CF_AUDIO_PAUSE_WRITE")) {
+        flag = CF_AUDIO_PAUSE_WRITE;
+    } else if(!strcasecmp(name, "CF_VIDEO_PAUSE_READ")) {
+        flag = CF_VIDEO_PAUSE_WRITE;
+    } else if(!strcasecmp(name, "CF_VIDEO_PAUSE_WRITE")) {
+        flag = CF_VIDEO_BREAK;
+    } else if(!strcasecmp(name, "CF_VIDEO_BREAK")) {
+        flag = CF_VIDEO_BREAK;
+    } else if(!strcasecmp(name, "CF_VIDEO_ECHO")) {
+        flag = CF_VIDEO_ECHO;
+    } else if(!strcasecmp(name, "CF_VIDEO_BLANK")) {
+        flag = CF_VIDEO_BLANK;
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unsupported flag: %s\n", name);
+    }
+
+    if(flag != CF_FLAG_MAX) {
+        if(val) {
+            switch_channel_set_flag(switch_core_session_get_channel(jss->session), flag);
+        } else {
+            switch_channel_clear_flag(switch_core_session_get_channel(jss->session), flag);
+        }
+        ret = JS_TRUE;
+    }
+
+    JS_FreeCString(ctx, name);
+    return ret;
+}
+
+// getChanFlag(name)
+static JSValue js_session_get_chan_flag(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
+    JSValue ret = JS_FALSE;
+    switch_channel_flag_t flag = CF_FLAG_MAX;
+    const char *name;
+
+    SESSION_SANITY_CHECK();
+
+    if(argc < 1 || QJS_IS_NULL(argv[0])) {
+        return JS_ThrowTypeError(ctx, "getChanFlag(name)");
+    }
+
+    name = JS_ToCString(ctx, argv[0]);
+    if(!strcasecmp(name, "CF_BREAK")) {
+        flag = CF_BREAK;
+    } else if(!strcasecmp(name, "CF_NO_RECOVER")) {
+        flag = CF_NO_RECOVER;
+    } else if(!strcasecmp(name, "CF_AUDIO_PAUSE_READ")) {
+        flag = CF_AUDIO_PAUSE_READ;
+    } else if(!strcasecmp(name, "CF_AUDIO_PAUSE_WRITE")) {
+        flag = CF_AUDIO_PAUSE_WRITE;
+    } else if(!strcasecmp(name, "CF_VIDEO_PAUSE_READ")) {
+        flag = CF_VIDEO_PAUSE_WRITE;
+    } else if(!strcasecmp(name, "CF_VIDEO_PAUSE_WRITE")) {
+        flag = CF_VIDEO_BREAK;
+    } else if(!strcasecmp(name, "CF_VIDEO_BREAK")) {
+        flag = CF_VIDEO_BREAK;
+    } else if(!strcasecmp(name, "CF_VIDEO_ECHO")) {
+        flag = CF_VIDEO_ECHO;
+    } else if(!strcasecmp(name, "CF_VIDEO_BLANK")) {
+        flag = CF_VIDEO_BLANK;
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Unsupported flag: %s\n", name);
+    }
+
+    if(flag != CF_FLAG_MAX) {
+        ret = switch_channel_test_flag(switch_core_session_get_channel(jss->session), flag) ? JS_TRUE: JS_FALSE;
+    }
+
+    JS_FreeCString(ctx, name);
+    return ret;
+}
+
 static JSValue js_session_get_digits(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *terminators = NULL;
@@ -1556,6 +1652,8 @@ static const JSCFunctionListEntry js_session_proto_funcs[] = {
     JS_CFUNC_DEF("flushDigits", 1, js_session_flush_digits),
     JS_CFUNC_DEF("setVariable", 2, js_session_set_var),
     JS_CFUNC_DEF("getVariable", 1, js_session_get_var),
+    JS_CFUNC_DEF("setChanFlag", 2, js_session_set_chan_flag),
+    JS_CFUNC_DEF("getChanFlag", 1, js_session_get_chan_flag),
     JS_CFUNC_DEF("getDigits", 4, js_session_get_digits),
     JS_CFUNC_DEF("answer", 0, js_session_answer),
     JS_CFUNC_DEF("preAnswer", 0, js_session_pre_answer),
