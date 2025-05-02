@@ -523,7 +523,7 @@ static JSValue js_session_bg_playback_start(JSContext *ctx, JSValueConst this_va
     return result;
 }
 
-// bgPlaybackCtl(pause|resume)
+// bgPlaybackCtl(pause|resume|speed|volume,[+|-|n])
 static JSValue js_session_bg_playback_ctl(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_session_t *jss = JS_GetOpaque2(ctx, this_val, js_session_get_classid(ctx));
     const char *action = NULL;
@@ -532,7 +532,7 @@ static JSValue js_session_bg_playback_ctl(JSContext *ctx, JSValueConst this_val,
     SESSION_SANITY_CHECK();
 
     if(!argc || QJS_IS_NULL(argv[0])) {
-        return JS_ThrowTypeError(ctx, "bgPlaybackCtl(pause|resume)");
+        return JS_ThrowTypeError(ctx, "bgPlaybackCtl(pause|resume|speed|volume,[+|-|n])");
     }
 
     action = JS_ToCString(ctx, argv[0]);
@@ -545,6 +545,56 @@ static JSValue js_session_bg_playback_ctl(JSContext *ctx, JSValueConst this_val,
         switch_mutex_lock(jss->mutex);
         if(jss->bg_stream_fh) switch_clear_flag(jss->bg_stream_fh, SWITCH_FILE_PAUSE);
         switch_mutex_unlock(jss->mutex);
+    } else if(!strcasecmp(action, "speed")) {
+        if(argc > 1) {
+            if(JS_IsNumber(argv[1])) {
+                int32_t ival = 0;
+                JS_ToUint32(ctx, &ival, argv[1]);
+                switch_mutex_lock(jss->mutex);
+                if(jss->bg_stream_fh) jss->bg_stream_fh->speed = ival;
+                switch_mutex_unlock(jss->mutex);
+            } else {
+                const char *sval = JS_ToCString(ctx, argv[1]);
+                if(sval[0] == '+' || sval[0] == '-') {
+                    int step = atoi(sval);
+                    switch_mutex_lock(jss->mutex);
+                    if(jss->bg_stream_fh) jss->bg_stream_fh->speed += (!step ? 1 : step);
+                    switch_mutex_unlock(jss->mutex);
+                } else {
+                    switch_mutex_lock(jss->mutex);
+                    if(jss->bg_stream_fh) jss->bg_stream_fh->speed += atoi(sval);
+                    switch_mutex_unlock(jss->mutex);
+                }
+                JS_FreeCString(ctx, sval);
+            }
+        } else {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Missing arg2\n");
+        }
+    } else if(!strcasecmp(action, "volume")) {
+        if(argc > 1) {
+            if(JS_IsNumber(argv[1])) {
+                int32_t ival = 0;
+                JS_ToUint32(ctx, &ival, argv[1]);
+                switch_mutex_lock(jss->mutex);
+                if(jss->bg_stream_fh) jss->bg_stream_fh->vol = ival;
+                switch_mutex_unlock(jss->mutex);
+            } else {
+                const char *sval = JS_ToCString(ctx, argv[1]);
+                if(sval[0] == '+' || sval[0] == '-') {
+                    int step = atoi(sval);
+                    switch_mutex_lock(jss->mutex);
+                    if(jss->bg_stream_fh) jss->bg_stream_fh->vol += (!step ? 1 : step);
+                    switch_mutex_unlock(jss->mutex);
+                } else {
+                    switch_mutex_lock(jss->mutex);
+                    if(jss->bg_stream_fh) jss->bg_stream_fh->vol += atoi(sval);
+                    switch_mutex_unlock(jss->mutex);
+                }
+                JS_FreeCString(ctx, sval);
+            }
+        } else {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Missing arg2\n");
+        }
     }
 
     JS_FreeCString(ctx, action);
