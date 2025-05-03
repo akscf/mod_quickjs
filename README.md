@@ -1,5 +1,6 @@
 <p>
     An alternative javascript module for the Freeswitch based on <a href="https://bellard.org/quickjs/">quickjs</a>. <br>
+    This module uses in the <a href="https://akstel.org/" target="_blank">SmartIVR</a> with <a href="https://demo1.akstel.org/" target="_blank">capabilities demo here</a>. 
 </p>
 
 ## version 1.7
