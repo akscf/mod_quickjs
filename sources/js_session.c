@@ -622,7 +622,7 @@ static JSValue js_session_play_and_get_digits(JSContext *ctx, JSValueConst this_
     uint32_t min_digits = 0, max_digits = 0, max_tries = 0, timeout = 0, digit_timeout = 0;
     const char *terminators = NULL, *audio_file = NULL, *bad_audio_file = NULL, *digits_regex = NULL, *var_name = NULL, *transfer_on_failure = NULL;
     char *terminators_ref = NULL;
-    JSValue result;
+    JSValue result = JS_UNDEFINED;
 
     SESSION_SANITY_CHECK();
 
@@ -733,6 +733,7 @@ static JSValue js_session_play_and_detect_speech(JSContext *ctx, JSValueConst th
         result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech_ex() failed (status=%i)\n", status);
+        result = JS_NewString(ctx, "[engine failure]");
     }
 
     JS_FreeCString(ctx, file_name);
@@ -755,7 +756,7 @@ static JSValue js_session_say_and_detect_speech(JSContext *ctx, JSValueConst thi
     const char *text = NULL;
     const char *extra_params = NULL;
     const char *asr_engine_name = NULL;
-    JSValue result;
+    JSValue result = JS_UNDEFINED;
 
     SESSION_SANITY_CHECK();
 
@@ -804,6 +805,7 @@ static JSValue js_session_say_and_detect_speech(JSContext *ctx, JSValueConst thi
         result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech_ex() failed (status=%i)\n", status);
+        result = JS_NewString(ctx, "[engine failure]");
     }
 
     JS_FreeCString(ctx, text);
@@ -825,7 +827,7 @@ static JSValue js_session_detect_speech(JSContext *ctx, JSValueConst this_val, i
     char *asr_extra_params = NULL;
     const char *extra_params = NULL;
     const char *asr_engine_name = NULL;
-    JSValue result;
+    JSValue result = JS_UNDEFINED;
 
     SESSION_SANITY_CHECK();
 
@@ -864,6 +866,7 @@ static JSValue js_session_detect_speech(JSContext *ctx, JSValueConst this_val, i
         result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech_ex() failed (status=%i)\n", status);
+        result = JS_NewString(ctx, "[engine failure]");
     }
 
     JS_FreeCString(ctx, extra_params);
@@ -884,7 +887,7 @@ static JSValue js_session_detect_speech_ex(JSContext *ctx, JSValueConst this_val
     const char *extra_params = NULL;
     const char *asr_engine_name = NULL;
     const char *ch_asr_engine_name = NULL;
-    JSValue result;
+    JSValue result = JS_UNDEFINED;
 
     SESSION_SANITY_CHECK();
 
@@ -931,6 +934,7 @@ static JSValue js_session_detect_speech_ex(JSContext *ctx, JSValueConst this_val
         result = zstr(stt_result) ? JS_UNDEFINED : JS_NewString(ctx, stt_result);
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "switch_ivr_play_and_detect_speech_ex() failed (status=%i)\n", status);
+        result = JS_NewString(ctx, "[engine failure]");
     }
 
     JS_FreeCString(ctx, asr_engine_name);

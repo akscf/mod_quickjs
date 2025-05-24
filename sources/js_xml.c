@@ -211,7 +211,7 @@ static JSValue js_xml_copy(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     js_xml_t *js_xml = JS_GetOpaque2(ctx, this_val, js_xml_get_classid(ctx));
     js_xml_t *js_xml2 = NULL;
     switch_xml_t xml = NULL;
-    JSValue obj;
+    JSValue obj = JS_UNDEFINED;
 
     XML_SANITY_CHECK();
 
@@ -245,7 +245,7 @@ static JSValue js_xml_next(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 static JSValue js_xml_serialize(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_xml_t *js_xml = JS_GetOpaque2(ctx, this_val, js_xml_get_classid(ctx));
     char *data = NULL;
-    JSValue obj;
+    JSValue obj = JS_UNDEFINED;
 
     XML_SANITY_CHECK();
 

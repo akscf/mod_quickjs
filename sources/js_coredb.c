@@ -169,7 +169,7 @@ static JSValue js_coredb_prepare(JSContext *ctx, JSValueConst this_val, int argc
 static JSValue js_coredb_fetch(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     js_coredb_t *js_coredb = JS_GetOpaque2(ctx, this_val, js_coredb_get_classid(ctx));
     int cols = 0, i = 0;
-    JSValue row_data;
+    JSValue row_data = JS_UNDEFINED;
 
     DB_SANITY_CHECK();
 
