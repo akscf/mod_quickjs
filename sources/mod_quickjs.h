@@ -24,12 +24,13 @@
 #define ARRAY_SIZE(a)       (sizeof(a) / sizeof((a)[0]))
 #define JID_NONE            0x0
 
-#define MOD_VERSION         "v1.7.5"
+#define MOD_VERSION         "v1.7.7"
 #define MOD_RT_TYPE         "opensource"
 
-#define MOD_QUICKJS_DEBUG
+//#define MOD_QUICKJS_DEBUG
 
 typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx, const char *module_name);
+typedef struct js_list_s  js_list_t;
 
 typedef struct {
     switch_mutex_t          *mutex;
@@ -61,6 +62,7 @@ typedef struct {
     JSContext               *ctx;
     JSRuntime               *rt;
     void                    *opaque;
+    js_list_t               *mod_hlist;
     // builtin classes
     JSClassID               class_id_codec;
     JSClassID               class_id_coredb;
@@ -96,5 +98,13 @@ script_t *script_lookup(char *id);
 
 /* quickjs */
 int has_suffix(const char *str, const char *suffix);
+
+/* llist.c */
+typedef void (*js_list_item_data_destructor_h)(void *data);
+switch_status_t js_list_create(js_list_t **list);
+switch_status_t js_list_destroy(js_list_t **list);
+switch_status_t js_list_add(js_list_t *list, void *data, js_list_item_data_destructor_h dh);
+switch_status_t js_list_foreach(js_list_t *list, void (*callback)(uint32_t, void *, void *), void *udata);
+
 
 #endif

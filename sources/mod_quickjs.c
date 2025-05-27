@@ -428,6 +428,12 @@ static JSValue js_chat_send(JSContext *ctx, JSValueConst this_val, int argc, JSV
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------
+static void xx_js_module_destructor(void *data) {
+    if(data) {
+        dlclose(data);
+    }
+}
+
 static JSModuleDef *xxx_js_module_loader(JSContext *ctx, const char *module_name) {
     JSModuleDef *m = NULL;
     JSValue func_val;
@@ -470,10 +476,11 @@ static JSModuleDef *xxx_js_module_loader(JSContext *ctx, const char *module_name
 
 }
 static JSModuleDef *xxx_so_module_loader(JSContext *ctx, const char *module_name) {
+    script_t *script = JS_GetContextOpaque(ctx);
     JSModuleDef *m = NULL;
     JSInitModuleFunc *init = NULL;
-    void *hd;
-    char *filename;
+    char *filename = NULL;
+    void *hd = NULL;
 
     if(!strchr(module_name, '/')) {
         filename = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.lib_dir, SWITCH_PATH_SEPARATOR, module_name);
@@ -496,20 +503,23 @@ static JSModuleDef *xxx_so_module_loader(JSContext *ctx, const char *module_name
     }
 
     init = dlsym(hd, "js_init_module");
-    if (!init) {
-        JS_ThrowReferenceError(ctx, "Unable to load module '%s' (js_init_module not found)", module_name);
+    if(!init) {
+        dlclose(hd);
+        JS_ThrowReferenceError(ctx, "Unable to load module '%s' (missing symbol: js_init_module)", module_name);
         goto fail;
     }
 
     m = init(ctx, module_name);
-    if (!m) {
-        JS_ThrowReferenceError(ctx, "Unable to load module '%s' (initialization error)", module_name);
-fail:
-        if (hd) dlclose(hd);
-        return NULL;
+    if(m) {
+        js_list_add(script->mod_hlist, hd, xx_js_module_destructor);
+        return m;
     }
 
-    return m;
+    /* fail */
+    dlclose(hd);
+    JS_ThrowReferenceError(ctx, "Unable to load module '%s' (initialization failed)", module_name);
+fail:
+    return NULL;
 }
 
 JSModuleDef *xxx_module_loader(JSContext *ctx, const char *module_name, void *opaque) {
@@ -577,8 +587,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     script_t *script = NULL;
 
     if(zstr(script_name)) {
-        status = SWITCH_STATUS_FALSE;
-        goto out;
+        switch_goto_status(SWITCH_STATUS_FALSE, out);
     }
     if(!zstr(script_args)) {
         script_args_local = strdup(script_args);
@@ -590,8 +599,7 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
         script_path_local = switch_mprintf("%s%s%s", SWITCH_GLOBAL_dirs.script_dir, SWITCH_PATH_SEPARATOR, script_name);
         if(switch_file_exists(script_path_local, NULL) != SWITCH_STATUS_SUCCESS) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "File not found (%s)\n", script_path_local);
-            status = SWITCH_STATUS_FALSE;
-            goto out;
+            switch_goto_status(SWITCH_STATUS_MEMERR, out);
         }
     }
 
@@ -602,8 +610,11 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
     }
     if((script = switch_core_alloc(pool, sizeof(script_t))) == NULL)  {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "switch_core_alloc()\n");
-        status = SWITCH_STATUS_MEMERR;
-        goto out;
+        switch_goto_status(SWITCH_STATUS_MEMERR, out);
+    }
+    if(js_list_create(&script->mod_hlist) != SWITCH_STATUS_SUCCESS) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "js_list_create()\n");
+        switch_goto_status(SWITCH_STATUS_MEMERR, out);
     }
 
     if(script_id) {
@@ -641,6 +652,9 @@ static switch_status_t script_launch(switch_core_session_t *session, char *scrip
 
 out:
     if(status != SWITCH_STATUS_SUCCESS) {
+        if(script) {
+            if(script->mod_hlist) js_list_destroy(&script->mod_hlist);
+        }
         if(pool)  {
             switch_core_destroy_memory_pool(&pool);
         }
@@ -805,6 +819,9 @@ out:
     switch_core_hash_delete(globals.scripts_map, script->id);
     switch_mutex_unlock(globals.mutex_scripts_map);
 
+    if(script->mod_hlist) {
+        js_list_destroy(&script->mod_hlist);
+    }
     if(pool) {
         switch_core_destroy_memory_pool(&pool);
     }
