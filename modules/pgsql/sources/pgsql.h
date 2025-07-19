@@ -8,6 +8,7 @@
 #include <quickjs.h>
 #include <libpq-fe.h>
 
+#define MOD_VERSION     "v1.0.19072025"
 #define QJS_PGSQL_DEBUG
 
 #define QJS_IS_NULL(jsV)    (JS_IsNull(jsV) || JS_IsUndefined(jsV) || JS_IsUninitialized(jsV))
