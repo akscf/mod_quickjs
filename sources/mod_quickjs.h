@@ -24,7 +24,7 @@
 #define ARRAY_SIZE(a)       (sizeof(a) / sizeof((a)[0]))
 #define JID_NONE            0x0
 
-#define MOD_VERSION         "v1.7.7"
+#define MOD_VERSION         "v1.7.8c"
 #define MOD_RT_TYPE         "opensource"
 
 //#define MOD_QUICKJS_DEBUG
