@@ -506,6 +506,11 @@ static JSValue js_session_fg_playback(JSContext *ctx, JSValueConst this_val, int
         args.input_callback = xxx_input_callback;
         args.buf = &cb_state;
         args.buflen = sizeof(cb_state);
+    } else {
+        const char *terms = switch_channel_get_variable(switch_core_session_get_channel(jss->session), "playback_terminators");
+        if(terms && !strcasecmp(terms, "none")) {
+            args.input_callback = xxx_input_ignore_callback;
+        }
     }
 
     if((prebuf = switch_channel_get_variable(switch_core_session_get_channel(jss->session), "stream_prebuffer"))) {
